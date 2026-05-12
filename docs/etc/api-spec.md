@@ -66,6 +66,15 @@
 - Request / Response JSON 필드는 `camelCase`를 사용한다.
 - URL path는 리소스 중심, 복수형, `kebab-case`를 사용한다.
 - DB 컬럼명은 ERD 기준 `snake_case`이지만 외부 API로 그대로 노출하지 않는다.
+- `title`, `participants`처럼 화면 편의를 위해 조합된 값은 DB 원본 컬럼이 아닌 파생 필드다.
+
+### Timestamp
+- 모든 timestamp는 KST(Asia/Seoul) 기준 ISO 8601 문자열로 직렬화한다. 예: `2026-05-04T18:10:00+09:00`.
+- 별도 timezone 변환은 클라이언트에서 수행하지 않는다.
+
+### Pagination
+- MVP에서는 페이지네이션을 지원하지 않는다. 목록 응답은 전체를 반환한다.
+- `meta` 객체에는 `requestId`만 포함한다.
 
 ## Domain Constants
 
@@ -96,6 +105,21 @@
 - `COMMAND_RESULT`
 - `SYSTEM_NOTICE`
 
+### GameRoomParticipantRole
+- `OWNER`
+- `PARTICIPANT`
+
+### GameRoomParticipantMembershipStatus
+- `INVITED`
+- `JOINED`
+- `LEFT`
+- `DENIED`
+
+### MissionDifficulty
+- `EASY`
+- `NORMAL`
+- `HARD`
+
 ### RoomCommandStatus
 - `PENDING`
 - `SUCCESS`
@@ -111,13 +135,23 @@
 ### TurnStatus
 - `IN_PROGRESS`
 - `SUBMITTED`
-- `EXPIRED`
-- `COMPLETED`
+- `TIMEOUT`
+
+> `erd.md`, `tech-spec.md`와 동일. `EXPIRED` / `COMPLETED`는 사용하지 않는다.
 
 ### ExecutionStatus
+- `PENDING`
+- `RUNNING`
 - `SUCCESS`
 - `FAILED`
 - `TIMEOUT`
+
+### GameRoomMissionStepStatus
+- `LOCKED`
+- `READY`
+- `IN_PROGRESS`
+- `CLEARED`
+- `FAILED`
 
 ### GameAiRequestType
 - `DEBUG`
@@ -176,6 +210,18 @@
 - `TURN_NOT_FOUND`
 - `AI_HINT_NOT_AVAILABLE`
 
+### WebSocket Close Codes
+MVP에서 사용하는 application close code 규약이다. close `reason`에 동일 의미의 문자열 에러 코드를 함께 실어 보낸다.
+
+| Code | Reason | 설명 |
+|------|--------|------|
+| `4401` | `AUTH_TOKEN_INVALID` | `accessToken` 누락, 서명 위반, 만료 등 JWT 검증 실패 |
+| `4403` | `FORBIDDEN_RESOURCE_ACCESS` | 토큰은 유효하나 해당 `gameRoomId`에 대해 `membershipStatus = JOINED`가 아님 |
+| `4404` | `GAME_ROOM_NOT_FOUND` | `gameRoomId`에 해당하는 방이 존재하지 않음 |
+| `1000` | 정상 종료 | 클라이언트가 명시적으로 닫음 |
+
+연결이 비정상적으로 끊긴 경우 서버는 해당 사용자의 `membershipStatus`를 `LEFT`로 업데이트한 뒤 `room-participants-updated`를 브로드캐스트한다. 재접속은 지원하지 않으며, 다시 참여하려면 새 초대를 받아야 한다.
+
 ---
 
 ## 1. GET /auth/check-nickname
@@ -190,6 +236,13 @@
 `GET /v1/auth/check-nickname?nickname=코딩고수`
 
 ### Response
+
+#### Success Schema
+- `data`: object
+  - `isAvailable`: boolean
+- `meta`: object
+  - `requestId`: string
+- `error`: null
 
 #### Success
 ```json
@@ -243,6 +296,17 @@
 
 ### Response
 
+#### Success Schema
+- `data`: object
+  - `userId`: string
+  - `loginId`: string
+  - `nickname`: string
+  - `email`: string | null
+  - `createdAt`: string
+- `meta`: object
+  - `requestId`: string
+- `error`: null
+
 #### Success
 ```json
 {
@@ -294,6 +358,19 @@
 ```
 
 ### Response
+
+#### Success Schema
+- `data`: object
+  - `accessToken`: string
+  - `refreshToken`: string
+  - `user`: object
+    - `userId`: string
+    - `loginId`: string
+    - `nickname`: string
+    - `email`: string | null
+- `meta`: object
+  - `requestId`: string
+- `error`: null
 
 #### Success
 ```json
@@ -348,6 +425,13 @@ refresh token으로 access token을 재발급한다.
 
 ### Response
 
+#### Success Schema
+- `data`: object
+  - `accessToken`: string
+- `meta`: object
+  - `requestId`: string
+- `error`: null
+
 #### Success
 ```json
 {
@@ -395,6 +479,21 @@ refresh token으로 access token을 재발급한다.
 `GET /v1/ai-chat-sessions?gameRoomId=550e8400-e29b-41d4-a716-446655440501&userId=550e8400-e29b-41d4-a716-446655440001`
 
 ### Response
+
+#### Success Schema
+- `data`: array<object>
+  - `aiChatSessionId`: string
+  - `requesterUserId`: string
+  - `gameRoomId`: string | null
+  - `status`: `ACTIVE` | `CLOSED` | `ERROR`
+  - `provider`: string
+  - `llmModel`: string
+  - `createdAt`: string
+  - `updatedAt`: string
+  - `closedAt`: string | null
+- `meta`: object
+  - `requestId`: string
+- `error`: null
 
 #### Success
 ```json
@@ -452,18 +551,39 @@ refresh token으로 access token을 재발급한다.
 
 ### Response
 
+#### Success Schema
+- `data`: array<object>
+  - `gameRoomId`: string
+  - `status`: `WAITING` | `IN_PROGRESS` | `JUDGING` | `ANALYZED` | `FINISHED`
+  - `difficulty`: `EASY` | `NORMAL` | `HARD`
+  - `ownerUserId`: string
+  - `myRole`: `OWNER` | `PARTICIPANT`
+  - `myMembershipStatus`: `INVITED` | `JOINED` | `LEFT` | `DENIED`
+  - `joinedParticipantCount`: number
+  - `timeLimitSeconds`: number
+  - `maxStrikeCount`: number
+  - `minParticipants`: number
+  - `maxParticipants`: number
+  - `createdAt`: string
+  - `updatedAt`: string
+- `meta`: object
+  - `requestId`: string
+- `error`: null
+
 #### Success
 ```json
 {
   "data": [
     {
       "gameRoomId": "550e8400-e29b-41d4-a716-446655440502",
-      "title": "문자열 핸들링 릴레이 방",
       "status": "WAITING",
+      "difficulty": "EASY",
       "ownerUserId": "550e8400-e29b-41d4-a716-446655440001",
       "myRole": "OWNER",
       "myMembershipStatus": "JOINED",
       "joinedParticipantCount": 2,
+      "timeLimitSeconds": 30,
+      "maxStrikeCount": 3,
       "minParticipants": 2,
       "maxParticipants": 4,
       "createdAt": "2026-05-04T09:11:21Z",
@@ -490,18 +610,32 @@ refresh token으로 access token을 재발급한다.
 현재 사용자의 방 참가/초대 상태를 `game_room_participants` 기준으로 복수 조회한다.
 
 ### 설명
-- `status = INVITED` 필터를 사용하면 초대 목록 조회 용도로 사용할 수 있다.
+- `membershipStatus = INVITED` 필터를 사용하면 초대 목록 조회 용도로 사용할 수 있다.
 
 ### Query Parameter
 - `gameRoomId`: string (optional)
 - `userId`: string (optional)
 - `role`: string (optional)
-- `status`: string (optional)
+- `membershipStatus`: string (optional)
 
 ### Request Example
-`GET /v1/game-room-participants?userId=550e8400-e29b-41d4-a716-446655440002&status=INVITED`
+`GET /v1/game-room-participants?userId=550e8400-e29b-41d4-a716-446655440002&membershipStatus=INVITED`
 
 ### Response
+
+#### Success Schema
+- `data`: array<object>
+  - `participantId`: string
+  - `gameRoomId`: string
+  - `userId`: string
+  - `nickname`: string
+  - `role`: `OWNER` | `PARTICIPANT`
+  - `membershipStatus`: `INVITED` | `JOINED` | `LEFT` | `DENIED`
+  - `roomStatus`: `WAITING` | `IN_PROGRESS` | `JUDGING` | `ANALYZED` | `FINISHED`
+  - `createdAt`: string
+- `meta`: object
+  - `requestId`: string
+- `error`: null
 
 #### Success
 ```json
@@ -510,11 +644,10 @@ refresh token으로 access token을 재발급한다.
     {
       "participantId": "550e8400-e29b-41d4-a716-446655440601",
       "gameRoomId": "550e8400-e29b-41d4-a716-446655440502",
-      "gameRoomTitle": "문자열 핸들링 릴레이 방",
       "userId": "550e8400-e29b-41d4-a716-446655440002",
       "nickname": "수민",
       "role": "PARTICIPANT",
-      "status": "INVITED",
+      "membershipStatus": "INVITED",
       "roomStatus": "WAITING",
       "createdAt": "2026-05-04T09:11:40Z"
     }
@@ -527,8 +660,8 @@ refresh token으로 access token을 재발급한다.
 ```
 
 ### Frontend Handling
-- `status = INVITED` 항목만 추려 초대 카드 목록을 렌더링한다.
-- 각 항목의 `gameRoomId`, `userId`, `role`, `status`를 기준으로 수락/거절 UI를 구성한다.
+- `membershipStatus = INVITED` 항목만 추려 초대 카드 목록을 렌더링한다.
+- 각 항목의 `gameRoomId`, `userId`, `role`, `membershipStatus`를 기준으로 수락/거절 UI를 구성한다.
 
 ---
 
@@ -544,6 +677,19 @@ AI 채팅 메시지 목록을 조회한다.
 `GET /v1/ai-chat-sessions/550e8400-e29b-41d4-a716-446655440101/messages`
 
 ### Response
+
+#### Success Schema
+- `data`: array<object>
+  - `messageId`: string
+  - `aiChatRequestId`: string | null
+  - `senderType`: `USER` | `ASSISTANT` | `SYSTEM`
+  - `messageType`: `TEXT` | `COMMAND_RESULT` | `SYSTEM_NOTICE`
+  - `content`: string
+  - `metadata`: object | null
+  - `createdAt`: string
+- `meta`: object
+  - `requestId`: string
+- `error`: null
 
 #### Success
 ```json
@@ -604,19 +750,37 @@ AI 채팅 메시지 목록을 조회한다.
 ### Response
 
 #### Success Schema
-- `aiChatRequestId`: string
-- `requestType`: string
-- `requestStatus`: string
-- `userMessage`: object
-- `assistantMessage`: object
-- `commandResult`: object | null
-  - `commandType`: string
-  - `status`: string
-  - `apiPath`: string | null
-  - `gameRoomId`: string | null
-  - `title`: string | null
-  - `participants`: array | null
-  - `started`: boolean | null
+- `data`: object
+  - `aiChatRequestId`: string
+  - `requestType`: `ROOM_CREATE` | `USER_INVITE` | `ROOM_JOIN` | `USER_INVITE_DENY` | `GAME_START`
+  - `requestStatus`: `RECEIVED` | `COMPLETED` | `FAILED`
+  - `userMessage`: object
+    - `messageId`: string
+    - `aiChatRequestId`: string | null
+    - `senderType`: `USER` | `ASSISTANT` | `SYSTEM`
+    - `messageType`: `TEXT` | `COMMAND_RESULT` | `SYSTEM_NOTICE`
+    - `content`: string
+    - `metadata`: object | null
+    - `createdAt`: string
+  - `assistantMessage`: object
+    - `messageId`: string
+    - `aiChatRequestId`: string | null
+    - `senderType`: `USER` | `ASSISTANT` | `SYSTEM`
+    - `messageType`: `TEXT` | `COMMAND_RESULT` | `SYSTEM_NOTICE`
+    - `content`: string
+    - `metadata`: object | null
+    - `createdAt`: string
+  - `commandResult`: object | null
+    - `commandType`: `ROOM_CREATE` | `USER_INVITE` | `ROOM_JOIN` | `USER_INVITE_DENY` | `GAME_START`
+    - `status`: `PENDING` | `SUCCESS` | `FAILED`
+    - `apiPath`: string | null
+    - `gameRoomId`: string | null
+    - `title`: string | null
+    - `participants`: string[] | null
+    - `started`: boolean | null
+- `meta`: object
+  - `requestId`: string
+- `error`: null
 
 #### Example - ROOM_CREATE
 ```json
@@ -821,6 +985,13 @@ AI 채팅 메시지 목록을 조회한다.
 
 ### Response
 
+#### Success Schema
+- `data`: object
+  - `success`: boolean
+- `meta`: object
+  - `requestId`: string
+- `error`: null
+
 #### Success
 ```json
 {
@@ -874,6 +1045,16 @@ AI 채팅 메시지 목록을 조회한다.
 `GET /v1/game-room-missions/mission-001/hints?scope=current-step`
 
 ### Response
+
+#### Success Schema
+- `data`: object
+  - `missionId`: string
+  - `gameRoomMissionStepId`: string | null
+  - `missionTemplateStepId`: string
+  - `hintText`: string | null
+- `meta`: object
+  - `requestId`: string
+- `error`: null
 
 #### Success
 ```json
@@ -942,6 +1123,12 @@ Client → Server
 - RoomPage 진입 시 전송한다.
 - 방 입장 후 실시간 코드 동기화를 시작한다.
 
+#### 인증 / 실패 처리
+- 서버는 `accessToken`을 JWT 검증한다.
+- `gameRoomId`에 대해 본인의 `game_room_participants.membership_status = JOINED` 여부를 확인한다.
+- 실패 시 위 "WebSocket Close Codes" 표에 따라 4401 / 4403 / 4404 close code로 연결을 종료한다.
+- 정상 연결이 끊어지면 서버는 해당 사용자를 `LEFT` 처리하고 다른 참가자에게 `room-participants-updated`를 브로드캐스트한다.
+
 ### 12.2 room-participants-updated
 
 #### Direction
@@ -984,8 +1171,11 @@ Server → Client
   },
   "gameState": {
     "status": "WAITING",
-    "strikeCount": 3,
-    "maxStrikeCount": 3
+    "difficulty": "EASY",
+    "timeLimitSeconds": 30,
+    "maxStrikeCount": 3,
+    "minParticipants": 2,
+    "maxParticipants": 4
   },
   "missionState": null,
   "occurredAt": "2026-05-04T10:00:00"
@@ -1036,11 +1226,12 @@ Server → Client
   "missionState": {
     "missionId": "mission-001",
     "missionTemplateId": "mission-template-001",
+    "currentStepId": "game-room-mission-step-001",
+    "currentStepStatus": "IN_PROGRESS",
     "title": "짝수 찾기",
     "description": "짝수만 반환하세요",
     "language": "python",
-    "difficulty": "EASY",
-    "status": "IN_PROGRESS"
+    "difficulty": "EASY"
   },
   "uiHints": {
     "enterGameScreen": true,
@@ -1062,15 +1253,17 @@ Server → Client
 Client → Server
 
 #### 목적
-코드 변경분을 실시간 동기화용으로 전송한다.
+현재 턴 플레이어의 코드 변경분을 실시간 동기화용으로 전송한다.
 
 #### Data
 - `gameRoomId`: string
 - `userId`: string
 - `sessionId`: string
 - `filePath`: string
-- `codeDelta`: string
-- `occurredAt`: string
+- `codeDelta`: object
+  - 단순 delta payload. CRDT(Yjs)는 사용하지 않는다.
+  - 예: `{ "rangeStart": 12, "rangeEnd": 12, "insertedText": "x" }` 또는 에디터가 제공하는 ChangeEvent 구조 그대로
+- `occurredAt`: string (KST ISO 8601)
 
 #### Example
 ```json
@@ -1079,10 +1272,19 @@ Client → Server
   "userId": "user-001",
   "sessionId": "session-001",
   "filePath": "main.py",
-  "codeDelta": "Yjs 변경 데이터",
-  "occurredAt": "2026-05-04T10:12:00"
+  "codeDelta": {
+    "rangeStart": 12,
+    "rangeEnd": 12,
+    "insertedText": "x"
+  },
+  "occurredAt": "2026-05-04T19:12:00+09:00"
 }
 ```
+
+#### Server Behavior
+- 현재 턴 사용자가 아닌 클라이언트의 `code-change`는 서버가 무시한다.
+- 서버는 룸 단위 in-memory 버퍼에 delta를 누적해 둔다(턴 제출/타임아웃 시 스냅샷 기준).
+- 다른 참가자에게 `code-updated`로 fan-out 한다.
 
 #### Frontend Handling
 - 코드 변경 시 전송한다.
@@ -1101,8 +1303,8 @@ Server → Client
 - `gameRoomId`: string
 - `userId`: string
 - `filePath`: string
-- `codeDelta`: string
-- `occurredAt`: string
+- `codeDelta`: object (12.4와 동일 형식)
+- `occurredAt`: string (KST ISO 8601)
 
 #### Example
 ```json
@@ -1110,8 +1312,12 @@ Server → Client
   "gameRoomId": "room-001",
   "userId": "user-002",
   "filePath": "main.py",
-  "codeDelta": "Yjs 변경 데이터",
-  "occurredAt": "2026-05-04T10:12:01"
+  "codeDelta": {
+    "rangeStart": 12,
+    "rangeEnd": 12,
+    "insertedText": "x"
+  },
+  "occurredAt": "2026-05-04T19:12:01+09:00"
 }
 ```
 
@@ -1211,6 +1417,7 @@ Server → Client
 - 실패면 피드백, 스트라이크 수, 오류 위치 표시를 갱신한다.
 - 성공이면 현재 단계 완료 상태를 반영한다.
 - 이 이벤트는 다음 턴 시작 전, 방금 제출된 턴의 검증 결과를 의미한다.
+- `evaluatedTurn.status`는 클라이언트 제출 시 `SUBMITTED`, 서버 타임아웃 자동 제출 시 `TIMEOUT`이다. 두 경우 모두 동일한 판정 파이프라인을 거치므로 UI 처리는 동일하다.
 
 ### 12.8 turn-changed
 
@@ -1352,6 +1559,6 @@ Server → Client
 
 1. 로그인 후 `GET /game-rooms`, `GET /game-room-participants`, `GET /ai-chat-sessions`로 메인 화면 초기 상태를 구성한다.
 2. 방이 없으면 `POST /ai-chat-sessions/{aiChatSessionId}/messages`로 AI 채팅 기반 방 생성 플로우를 시작한다.
-3. 초대가 있으면 `GET /game-room-participants?status=INVITED` 결과를 기반으로 수락/거절 UX를 제공한다.
+3. 초대가 있으면 `GET /game-room-participants?membershipStatus=INVITED` 결과를 기반으로 수락/거절 UX를 제공한다.
 4. 게임 시작은 AI 채팅의 `GAME_START` 응답 또는 직접 `POST /game-rooms/{gameRoomId}/start`로 연결한다.
 5. 게임 시작 이후 상태 동기화는 WebSocket 이벤트를 기준으로 처리한다.
