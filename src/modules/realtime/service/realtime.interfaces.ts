@@ -9,6 +9,15 @@ export interface JoinRoomPayload {
   userId?: string;
 }
 
+export interface CodeChangePayload {
+  gameRoomId: string;
+  userId?: string;
+  sessionId?: string;
+  filePath: string;
+  content: string;
+  occurredAt?: string;
+}
+
 export interface RealtimeAuthenticatedUser {
   userId: string;
 }
@@ -34,6 +43,34 @@ export interface RealtimeJoinRoomState {
   initialState: RoomParticipantsUpdatedEvent;
 }
 
+export interface CodeUpdatedEvent {
+  gameRoomId: string;
+  userId: string;
+  filePath: string;
+  content: string;
+  occurredAt: string;
+}
+
+export interface RealtimeTurnEditAuthorization {
+  isEditable: boolean;
+  currentTurnId: string | null;
+  currentTurnUserId: string | null;
+}
+
+export interface RealtimeFileContentBuffer {
+  gameRoomId: string;
+  turnId: string;
+  userId: string;
+  filePath: string;
+  content: string;
+  occurredAt: string;
+}
+
+export interface RealtimeCurrentTurnState {
+  currentTurnId: string | null;
+  currentTurnUserId: string | null;
+}
+
 export interface RealtimeAuthService {
   validateAccessToken(accessToken: string): Promise<RealtimeAuthenticatedUser>;
 }
@@ -47,4 +84,27 @@ export interface RealtimeRoomAccessService {
 
 export interface RealtimeDisconnectService {
   handleDisconnect(input: { gameRoomId: string; userId: string }): Promise<void>;
+}
+
+export interface RealtimeTurnEditService {
+  authorizeCodeChange(input: {
+    gameRoomId: string;
+    userId: string;
+  }): Promise<RealtimeTurnEditAuthorization>;
+}
+
+export interface RealtimeSupportStateStore {
+  saveCurrentTurnState(input: {
+    gameRoomId: string;
+    currentTurnId: string | null;
+    currentTurnUserId: string | null;
+  }): Promise<void>;
+  getCurrentTurnState(input: { gameRoomId: string }): Promise<RealtimeCurrentTurnState | null>;
+  saveLatestFileContent(buffer: RealtimeFileContentBuffer): Promise<void>;
+  getLatestFileContent(input: {
+    gameRoomId: string;
+    turnId: string;
+    filePath: string;
+  }): Promise<RealtimeFileContentBuffer | null>;
+  clearLatestFileContents(input: { gameRoomId: string; turnId: string }): Promise<void>;
 }

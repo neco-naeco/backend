@@ -1,10 +1,14 @@
 export const REALTIME_AUTH_SERVICE = Symbol('REALTIME_AUTH_SERVICE');
 export const REALTIME_ROOM_ACCESS_SERVICE = Symbol('REALTIME_ROOM_ACCESS_SERVICE');
 export const REALTIME_DISCONNECT_SERVICE = Symbol('REALTIME_DISCONNECT_SERVICE');
+export const REALTIME_TURN_EDIT_SERVICE = Symbol('REALTIME_TURN_EDIT_SERVICE');
+export const REALTIME_SUPPORT_STATE_STORE = Symbol('REALTIME_SUPPORT_STATE_STORE');
 
 export const REALTIME_EVENT = {
   JOIN_ROOM: 'join-room',
   ROOM_PARTICIPANTS_UPDATED: 'room-participants-updated',
+  CODE_CHANGE: 'code-change',
+  CODE_UPDATED: 'code-updated',
 } as const;
 
 export const REALTIME_CLOSE_CODE = {

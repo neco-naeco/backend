@@ -5,6 +5,8 @@ import {
   RealtimeDisconnectService,
   RealtimeJoinRoomState,
   RealtimeRoomAccessService,
+  RealtimeTurnEditAuthorization,
+  RealtimeTurnEditService,
 } from './realtime.interfaces';
 
 @Injectable()
@@ -27,4 +29,18 @@ export class DefaultRealtimeRoomAccessService implements RealtimeRoomAccessServi
 @Injectable()
 export class DefaultRealtimeDisconnectService implements RealtimeDisconnectService {
   async handleDisconnect(_input: { gameRoomId: string; userId: string }): Promise<void> {}
+}
+
+@Injectable()
+export class DefaultRealtimeTurnEditService implements RealtimeTurnEditService {
+  async authorizeCodeChange(_input: {
+    gameRoomId: string;
+    userId: string;
+  }): Promise<RealtimeTurnEditAuthorization> {
+    return {
+      isEditable: false,
+      currentTurnId: null,
+      currentTurnUserId: null,
+    };
+  }
 }

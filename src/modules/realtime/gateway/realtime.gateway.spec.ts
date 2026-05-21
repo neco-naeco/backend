@@ -9,12 +9,16 @@ import {
   REALTIME_AUTH_SERVICE,
   REALTIME_DISCONNECT_SERVICE,
   REALTIME_ROOM_ACCESS_SERVICE,
+  REALTIME_SUPPORT_STATE_STORE,
+  REALTIME_TURN_EDIT_SERVICE,
 } from '../service/realtime.constants';
 import {
   RealtimeAuthService,
   RealtimeDisconnectService,
   RealtimeJoinRoomState,
   RealtimeRoomAccessService,
+  RealtimeSupportStateStore,
+  RealtimeTurnEditService,
 } from '../service/realtime.interfaces';
 
 describe('RealtimeGateway', () => {
@@ -23,6 +27,8 @@ describe('RealtimeGateway', () => {
   let authService: jest.Mocked<RealtimeAuthService>;
   let roomAccessService: jest.Mocked<RealtimeRoomAccessService>;
   let disconnectService: jest.Mocked<RealtimeDisconnectService>;
+  let turnEditService: jest.Mocked<RealtimeTurnEditService>;
+  let supportStateStore: RealtimeSupportStateStore;
 
   beforeEach(async () => {
     authService = {
@@ -34,6 +40,9 @@ describe('RealtimeGateway', () => {
     disconnectService = {
       handleDisconnect: jest.fn(),
     };
+    turnEditService = {
+      authorizeCodeChange: jest.fn(),
+    };
 
     const moduleRef = await Test.createTestingModule({
       imports: [RealtimeModule],
@@ -44,11 +53,14 @@ describe('RealtimeGateway', () => {
       .useValue(roomAccessService)
       .overrideProvider(REALTIME_DISCONNECT_SERVICE)
       .useValue(disconnectService)
+      .overrideProvider(REALTIME_TURN_EDIT_SERVICE)
+      .useValue(turnEditService)
       .compile();
 
     app = moduleRef.createNestApplication();
     app.useWebSocketAdapter(new NecoWsAdapter(app));
     await app.listen(0);
+    supportStateStore = app.get(REALTIME_SUPPORT_STATE_STORE);
 
     const address = app.getHttpServer().address();
     port = typeof address === 'string' ? 0 : address.port;
@@ -158,6 +170,210 @@ describe('RealtimeGateway', () => {
     });
     socket.close();
   });
+
+  it('caches current turn support state from join-room payload when the room is in progress', async () => {
+    authService.validateAccessToken.mockResolvedValue({ userId: 'user-001' });
+    roomAccessService.getJoinRoomState.mockResolvedValue(createJoinRoomStateInProgress());
+
+    const socket = await connectClient(port);
+    const messageEvent = waitForMessage(socket);
+
+    sendJoinRoom(socket, {
+      accessToken: 'valid-token',
+      gameRoomId: 'room-001',
+      userId: 'user-001',
+    });
+
+    await messageEvent;
+
+    await expect(
+      supportStateStore.getCurrentTurnState({
+        gameRoomId: 'room-001',
+      }),
+    ).resolves.toEqual({
+      currentTurnId: 'turn-001',
+      currentTurnUserId: 'user-001',
+    });
+
+    socket.close();
+  });
+
+  it('fans out code-updated and stores the latest file content ephemerally', async () => {
+    authService.validateAccessToken.mockImplementation(async (accessToken) => ({
+      userId: accessToken === 'owner-token' ? 'user-001' : 'user-002',
+    }));
+    roomAccessService.getJoinRoomState.mockResolvedValue(createJoinRoomState());
+    turnEditService.authorizeCodeChange.mockResolvedValue({
+      isEditable: true,
+      currentTurnId: 'turn-001',
+      currentTurnUserId: 'user-001',
+    });
+
+    const ownerSocket = await connectClient(port);
+    const watcherSocket = await connectClient(port);
+
+    const ownerJoinMessage = waitForMessage(ownerSocket);
+    sendJoinRoom(ownerSocket, {
+      accessToken: 'owner-token',
+      gameRoomId: 'room-001',
+      userId: 'user-001',
+    });
+    await ownerJoinMessage;
+
+    const watcherJoinMessage = waitForMessage(watcherSocket);
+    sendJoinRoom(watcherSocket, {
+      accessToken: 'watcher-token',
+      gameRoomId: 'room-001',
+      userId: 'user-002',
+    });
+    await watcherJoinMessage;
+
+    const codeUpdatedMessage = waitForMessage(watcherSocket);
+    sendCodeChange(ownerSocket, {
+      gameRoomId: 'room-001',
+      userId: 'forged-user-id',
+      sessionId: 'session-001',
+      filePath: 'main.py',
+      content: 'print(\"hello\")\n',
+      occurredAt: '2026-05-21T13:00:00+09:00',
+    });
+
+    await expect(codeUpdatedMessage).resolves.toEqual({
+      event: 'code-updated',
+      data: {
+        gameRoomId: 'room-001',
+        userId: 'user-001',
+        filePath: 'main.py',
+        content: 'print(\"hello\")\n',
+        occurredAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+      },
+    });
+    const latestFileContent = await supportStateStore.getLatestFileContent({
+      gameRoomId: 'room-001',
+      turnId: 'turn-001',
+      filePath: 'main.py',
+    });
+
+    expect(latestFileContent).toMatchObject({
+      gameRoomId: 'room-001',
+      turnId: 'turn-001',
+      userId: 'user-001',
+      filePath: 'main.py',
+      content: 'print(\"hello\")\n',
+    });
+    expect(latestFileContent?.occurredAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    await expect(
+      supportStateStore.getCurrentTurnState({
+        gameRoomId: 'room-001',
+      }),
+    ).resolves.toEqual({
+      currentTurnId: 'turn-001',
+      currentTurnUserId: 'user-001',
+    });
+
+    ownerSocket.close();
+    watcherSocket.close();
+  });
+
+  it('ignores code-change when the socket user is not the current turn player', async () => {
+    authService.validateAccessToken.mockResolvedValue({ userId: 'user-002' });
+    roomAccessService.getJoinRoomState.mockResolvedValue(createJoinRoomState());
+    turnEditService.authorizeCodeChange.mockResolvedValue({
+      isEditable: false,
+      currentTurnId: 'turn-001',
+      currentTurnUserId: 'user-001',
+    });
+
+    const socket = await connectClient(port);
+    const joinMessage = waitForMessage(socket);
+    sendJoinRoom(socket, {
+      accessToken: 'watcher-token',
+      gameRoomId: 'room-001',
+      userId: 'user-002',
+    });
+    await joinMessage;
+
+    sendCodeChange(socket, {
+      gameRoomId: 'room-001',
+      userId: 'user-002',
+      sessionId: 'session-002',
+      filePath: 'main.py',
+      content: 'print(\"forbidden\")\n',
+      occurredAt: '2026-05-21T13:05:00+09:00',
+    });
+
+    await flushMicrotasks();
+
+    await expect(
+      supportStateStore.getLatestFileContent({
+        gameRoomId: 'room-001',
+        turnId: 'turn-001',
+        filePath: 'main.py',
+      }),
+    ).resolves.toBeNull();
+    await expect(
+      supportStateStore.getCurrentTurnState({
+        gameRoomId: 'room-001',
+      }),
+    ).resolves.toEqual({
+      currentTurnId: 'turn-001',
+      currentTurnUserId: 'user-001',
+    });
+
+    socket.close();
+  });
+
+  it('swallows code-change support-state failures without broadcasting corrupt state', async () => {
+    authService.validateAccessToken.mockResolvedValue({ userId: 'user-001' });
+    roomAccessService.getJoinRoomState.mockResolvedValue(createJoinRoomState());
+    turnEditService.authorizeCodeChange.mockRejectedValue(new Error('turn lookup failed'));
+
+    const ownerSocket = await connectClient(port);
+    const watcherSocket = await connectClient(port);
+
+    const ownerJoinMessage = waitForMessage(ownerSocket);
+    sendJoinRoom(ownerSocket, {
+      accessToken: 'owner-token',
+      gameRoomId: 'room-001',
+      userId: 'user-001',
+    });
+    await ownerJoinMessage;
+
+    const watcherJoinMessage = waitForMessage(watcherSocket);
+    sendJoinRoom(watcherSocket, {
+      accessToken: 'watcher-token',
+      gameRoomId: 'room-001',
+      userId: 'user-002',
+    });
+    await watcherJoinMessage;
+
+    sendCodeChange(ownerSocket, {
+      gameRoomId: 'room-001',
+      userId: 'user-001',
+      sessionId: 'session-001',
+      filePath: 'main.py',
+      content: 'print(\"error\")\n',
+      occurredAt: '2026-05-21T13:10:00+09:00',
+    });
+
+    await flushMicrotasks();
+
+    await expect(
+      supportStateStore.getCurrentTurnState({
+        gameRoomId: 'room-001',
+      }),
+    ).resolves.toBeNull();
+    await expect(
+      supportStateStore.getLatestFileContent({
+        gameRoomId: 'room-001',
+        turnId: 'turn-001',
+        filePath: 'main.py',
+      }),
+    ).resolves.toBeNull();
+
+    ownerSocket.close();
+    watcherSocket.close();
+  });
 });
 
 async function connectClient(port: number): Promise<WebSocket> {
@@ -175,6 +391,25 @@ function sendJoinRoom(socket: WebSocket, payload: { accessToken: string; gameRoo
   socket.send(
     JSON.stringify({
       event: 'join-room',
+      data: payload,
+    }),
+  );
+}
+
+function sendCodeChange(
+  socket: WebSocket,
+  payload: {
+    gameRoomId: string;
+    userId: string;
+    sessionId: string;
+    filePath: string;
+    content: string;
+    occurredAt: string;
+  },
+): void {
+  socket.send(
+    JSON.stringify({
+      event: 'code-change',
       data: payload,
     }),
   );
@@ -220,4 +455,35 @@ function createJoinRoomState(): RealtimeJoinRoomState {
       occurredAt: '2026-05-21T12:00:00+09:00',
     },
   };
+}
+
+function createJoinRoomStateInProgress(): RealtimeJoinRoomState {
+  return {
+    gameRoomId: 'room-001',
+    initialState: {
+      gameRoomId: 'room-001',
+      participants: [
+        {
+          userId: 'user-001',
+          nickname: 'owner',
+          role: GameRoomParticipantRole.OWNER,
+          membershipStatus: GameRoomParticipantMembershipStatus.JOINED,
+        },
+      ],
+      changedParticipant: null,
+      gameState: {
+        status: 'IN_PROGRESS',
+        turnState: {
+          turnId: 'turn-001',
+          currentPlayerId: 'user-001',
+        },
+      },
+      missionState: null,
+      occurredAt: '2026-05-21T12:05:00+09:00',
+    },
+  };
+}
+
+function flushMicrotasks(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
 }

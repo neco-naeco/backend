@@ -13,6 +13,7 @@ import {
   WebSocketGateway,
 } from '@nestjs/websockets';
 import WebSocket from 'ws';
+import { toSeoulIso } from '../../../common';
 import {
   REALTIME_AUTH_SERVICE,
   REALTIME_CLOSE_CODE,
@@ -20,12 +21,18 @@ import {
   REALTIME_DISCONNECT_SERVICE,
   REALTIME_EVENT,
   REALTIME_ROOM_ACCESS_SERVICE,
+  REALTIME_SUPPORT_STATE_STORE,
+  REALTIME_TURN_EDIT_SERVICE,
 } from '../service/realtime.constants';
 import {
+  CodeChangePayload,
+  CodeUpdatedEvent,
   JoinRoomPayload,
   RealtimeAuthService,
   RealtimeDisconnectService,
   RealtimeRoomAccessService,
+  RealtimeSupportStateStore,
+  RealtimeTurnEditService,
   RoomParticipantsUpdatedEvent,
 } from '../service/realtime.interfaces';
 
@@ -47,6 +54,10 @@ export class RealtimeGateway implements OnGatewayDisconnect {
     private readonly roomAccessService: RealtimeRoomAccessService,
     @Inject(REALTIME_DISCONNECT_SERVICE)
     private readonly disconnectService: RealtimeDisconnectService,
+    @Inject(REALTIME_TURN_EDIT_SERVICE)
+    private readonly turnEditService: RealtimeTurnEditService,
+    @Inject(REALTIME_SUPPORT_STATE_STORE)
+    private readonly supportStateStore: RealtimeSupportStateStore,
   ) {}
 
   @SubscribeMessage(REALTIME_EVENT.JOIN_ROOM)
@@ -83,9 +94,60 @@ export class RealtimeGateway implements OnGatewayDisconnect {
         gameRoomId: joinRoomState.gameRoomId,
         userId: authenticatedUser.userId,
       });
+      await this.syncCurrentTurnStateFromGameState(
+        joinRoomState.gameRoomId,
+        joinRoomState.initialState.gameState,
+      );
       this.sendEvent(client, REALTIME_EVENT.ROOM_PARTICIPANTS_UPDATED, joinRoomState.initialState);
     } catch (error) {
       this.handleJoinError(client, error);
+    }
+  }
+
+  @SubscribeMessage(REALTIME_EVENT.CODE_CHANGE)
+  async handleCodeChange(
+    @ConnectedSocket() client: WebSocket,
+    @MessageBody() payload: CodeChangePayload,
+  ): Promise<void> {
+    const session = this.socketSessions.get(client);
+
+    if (!session || !this.isValidCodeChangePayload(payload) || payload.gameRoomId !== session.gameRoomId) {
+      return;
+    }
+
+    try {
+      const authorization = await this.turnEditService.authorizeCodeChange({
+        gameRoomId: session.gameRoomId,
+        userId: session.userId,
+      });
+
+      await this.supportStateStore.saveCurrentTurnState({
+        gameRoomId: session.gameRoomId,
+        currentTurnId: authorization.currentTurnId,
+        currentTurnUserId: authorization.currentTurnUserId,
+      });
+
+      if (!authorization.isEditable || !this.hasText(authorization.currentTurnId)) {
+        return;
+      }
+
+      const occurredAt = toSeoulIso(new Date());
+      const codeUpdatedEvent: CodeUpdatedEvent = {
+        gameRoomId: session.gameRoomId,
+        userId: session.userId,
+        filePath: payload.filePath,
+        content: payload.content,
+        occurredAt,
+      };
+
+      await this.supportStateStore.saveLatestFileContent({
+        ...codeUpdatedEvent,
+        turnId: authorization.currentTurnId,
+      });
+      this.broadcastToRoom(session.gameRoomId, REALTIME_EVENT.CODE_UPDATED, codeUpdatedEvent, client);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'unknown code-change error';
+      this.logger.warn(`Failed to process code-change: ${message}`);
     }
   }
 
@@ -136,7 +198,11 @@ export class RealtimeGateway implements OnGatewayDisconnect {
     }
   }
 
-  private sendEvent(client: WebSocket, event: string, data: RoomParticipantsUpdatedEvent): void {
+  private sendEvent(
+    client: WebSocket,
+    event: string,
+    data: RoomParticipantsUpdatedEvent | CodeUpdatedEvent,
+  ): void {
     if (client.readyState !== WebSocket.OPEN) {
       return;
     }
@@ -147,6 +213,27 @@ export class RealtimeGateway implements OnGatewayDisconnect {
         data,
       }),
     );
+  }
+
+  private broadcastToRoom(
+    gameRoomId: string,
+    event: string,
+    data: CodeUpdatedEvent,
+    excludedClient?: WebSocket,
+  ): void {
+    const roomSockets = this.roomSessions.get(gameRoomId);
+
+    if (!roomSockets) {
+      return;
+    }
+
+    for (const roomSocket of roomSockets) {
+      if (roomSocket === excludedClient) {
+        continue;
+      }
+
+      this.sendEvent(roomSocket, event, data);
+    }
   }
 
   private handleJoinError(client: WebSocket, error: unknown): void {
@@ -192,5 +279,53 @@ export class RealtimeGateway implements OnGatewayDisconnect {
 
   private hasText(value: unknown): value is string {
     return typeof value === 'string' && value.trim().length > 0;
+  }
+
+  private isValidCodeChangePayload(payload: CodeChangePayload | undefined): payload is CodeChangePayload {
+    return (
+      this.hasText(payload?.gameRoomId) &&
+      this.hasText(payload.filePath) &&
+      typeof payload.content === 'string'
+    );
+  }
+
+  private async syncCurrentTurnStateFromGameState(
+    gameRoomId: string,
+    gameState: Record<string, unknown>,
+  ): Promise<void> {
+    const turnState = this.extractTurnState(gameState);
+
+    if (!turnState) {
+      return;
+    }
+
+    await this.supportStateStore.saveCurrentTurnState({
+      gameRoomId,
+      currentTurnId: turnState.turnId,
+      currentTurnUserId: turnState.currentPlayerId,
+    });
+  }
+
+  private extractTurnState(gameState: Record<string, unknown>): {
+    turnId: string;
+    currentPlayerId: string;
+  } | null {
+    const turnState = gameState.turnState;
+
+    if (!turnState || typeof turnState !== 'object') {
+      return null;
+    }
+
+    const maybeTurnId = (turnState as Record<string, unknown>).turnId;
+    const maybeCurrentPlayerId = (turnState as Record<string, unknown>).currentPlayerId;
+
+    if (!this.hasText(maybeTurnId) || !this.hasText(maybeCurrentPlayerId)) {
+      return null;
+    }
+
+    return {
+      turnId: maybeTurnId,
+      currentPlayerId: maybeCurrentPlayerId,
+    };
   }
 }
