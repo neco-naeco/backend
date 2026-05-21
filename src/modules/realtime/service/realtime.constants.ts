@@ -3,12 +3,20 @@ export const REALTIME_ROOM_ACCESS_SERVICE = Symbol('REALTIME_ROOM_ACCESS_SERVICE
 export const REALTIME_DISCONNECT_SERVICE = Symbol('REALTIME_DISCONNECT_SERVICE');
 export const REALTIME_TURN_EDIT_SERVICE = Symbol('REALTIME_TURN_EDIT_SERVICE');
 export const REALTIME_SUPPORT_STATE_STORE = Symbol('REALTIME_SUPPORT_STATE_STORE');
+export const REALTIME_TURN_SUBMIT_SERVICE = Symbol('REALTIME_TURN_SUBMIT_SERVICE');
+export const REALTIME_ASSISTIVE_MESSAGE_SERVICE = Symbol('REALTIME_ASSISTIVE_MESSAGE_SERVICE');
 
 export const REALTIME_EVENT = {
   JOIN_ROOM: 'join-room',
   ROOM_PARTICIPANTS_UPDATED: 'room-participants-updated',
+  GAME_STARTED: 'game-started',
   CODE_CHANGE: 'code-change',
   CODE_UPDATED: 'code-updated',
+  TURN_SUBMIT: 'turn-submit',
+  TURN_EVALUATED: 'turn-evaluated',
+  TURN_CHANGED: 'turn-changed',
+  GAME_STATE_UPDATED: 'game-state-updated',
+  MISSION_RESULT: 'mission-result',
 } as const;
 
 export const REALTIME_CLOSE_CODE = {

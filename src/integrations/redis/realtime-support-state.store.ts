@@ -47,6 +47,21 @@ export class InMemoryRealtimeSupportStateStore implements RealtimeSupportStateSt
     return this.latestFileContentByRoom.get(input.gameRoomId)?.get(input.turnId)?.get(input.filePath) ?? null;
   }
 
+  async listLatestFileContents(input: {
+    gameRoomId: string;
+    turnId: string;
+  }): Promise<RealtimeFileContentBuffer[]> {
+    const turnBuffer = this.latestFileContentByRoom
+      .get(input.gameRoomId)
+      ?.get(input.turnId);
+
+    if (!turnBuffer) {
+      return [];
+    }
+
+    return Array.from(turnBuffer.values());
+  }
+
   async clearLatestFileContents(input: {
     gameRoomId: string;
     turnId: string;

@@ -1,4 +1,5 @@
 import {
+  AiRealtimeEventType,
   GameRoomParticipantMembershipStatus,
   GameRoomParticipantRole,
 } from '../../../shared/enums';
@@ -16,6 +17,17 @@ export interface CodeChangePayload {
   filePath: string;
   content: string;
   occurredAt?: string;
+}
+
+export interface TurnSubmitPayload {
+  gameRoomId: string;
+  occurredAt?: string;
+  files?: TurnSubmitFilePayload[];
+}
+
+export interface TurnSubmitFilePayload {
+  filePath: string;
+  content: string;
 }
 
 export interface RealtimeAuthenticatedUser {
@@ -71,6 +83,68 @@ export interface RealtimeCurrentTurnState {
   currentTurnUserId: string | null;
 }
 
+export interface RealtimeAssistiveNotice {
+  type: AiRealtimeEventType;
+  message: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface TurnSubmitEvent {
+  gameRoomId: string;
+  turnId: string;
+  userId: string;
+  occurredAt: string;
+}
+
+export interface TurnEvaluatedEvent {
+  gameRoomId: string;
+  turnId: string;
+  userId: string;
+  evaluation: Record<string, unknown>;
+  occurredAt: string;
+  aiNotice?: RealtimeAssistiveNotice | null;
+}
+
+export interface TurnChangedEvent {
+  gameRoomId: string;
+  previousTurnId: string | null;
+  currentTurnId: string | null;
+  currentTurnUserId: string | null;
+  occurredAt: string;
+}
+
+export interface GameStateUpdatedEvent {
+  gameRoomId: string;
+  gameState: Record<string, unknown>;
+  occurredAt: string;
+  aiNotice?: RealtimeAssistiveNotice | null;
+}
+
+export interface MissionResultEvent {
+  gameRoomId: string;
+  missionId: string;
+  result: Record<string, unknown>;
+  occurredAt: string;
+  aiNotice?: RealtimeAssistiveNotice | null;
+}
+
+export interface RealtimeTurnSubmitRequest {
+  gameRoomId: string;
+  turnId: string;
+  userId: string;
+  occurredAt: string;
+  files: RealtimeFileContentBuffer[];
+}
+
+export interface RealtimeAssistiveMessageRequest {
+  event: string;
+  gameRoomId: string;
+  turnId?: string | null;
+  missionId?: string | null;
+  userId?: string | null;
+  payload: Record<string, unknown>;
+}
+
 export interface RealtimeAuthService {
   validateAccessToken(accessToken: string): Promise<RealtimeAuthenticatedUser>;
 }
@@ -93,6 +167,16 @@ export interface RealtimeTurnEditService {
   }): Promise<RealtimeTurnEditAuthorization>;
 }
 
+export interface RealtimeTurnSubmitService {
+  submitTurn(input: RealtimeTurnSubmitRequest): Promise<TurnSubmitEvent | null>;
+}
+
+export interface RealtimeAssistiveMessageService {
+  buildNotice(
+    input: RealtimeAssistiveMessageRequest,
+  ): Promise<RealtimeAssistiveNotice | null>;
+}
+
 export interface RealtimeSupportStateStore {
   saveCurrentTurnState(input: {
     gameRoomId: string;
@@ -106,5 +190,9 @@ export interface RealtimeSupportStateStore {
     turnId: string;
     filePath: string;
   }): Promise<RealtimeFileContentBuffer | null>;
+  listLatestFileContents(input: {
+    gameRoomId: string;
+    turnId: string;
+  }): Promise<RealtimeFileContentBuffer[]>;
   clearLatestFileContents(input: { gameRoomId: string; turnId: string }): Promise<void>;
 }

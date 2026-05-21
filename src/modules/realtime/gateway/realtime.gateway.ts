@@ -23,17 +23,26 @@ import {
   REALTIME_ROOM_ACCESS_SERVICE,
   REALTIME_SUPPORT_STATE_STORE,
   REALTIME_TURN_EDIT_SERVICE,
+  REALTIME_TURN_SUBMIT_SERVICE,
 } from '../service/realtime.constants';
 import {
   CodeChangePayload,
   CodeUpdatedEvent,
+  GameStateUpdatedEvent,
   JoinRoomPayload,
+  MissionResultEvent,
   RealtimeAuthService,
   RealtimeDisconnectService,
   RealtimeRoomAccessService,
   RealtimeSupportStateStore,
+  RealtimeFileContentBuffer,
+  RealtimeTurnSubmitService,
   RealtimeTurnEditService,
   RoomParticipantsUpdatedEvent,
+  TurnChangedEvent,
+  TurnEvaluatedEvent,
+  TurnSubmitEvent,
+  TurnSubmitPayload,
 } from '../service/realtime.interfaces';
 
 interface SocketSession {
@@ -57,6 +66,8 @@ export class RealtimeGateway implements OnGatewayDisconnect {
     private readonly disconnectService: RealtimeDisconnectService,
     @Inject(REALTIME_TURN_EDIT_SERVICE)
     private readonly turnEditService: RealtimeTurnEditService,
+    @Inject(REALTIME_TURN_SUBMIT_SERVICE)
+    private readonly turnSubmitService: RealtimeTurnSubmitService,
     @Inject(REALTIME_SUPPORT_STATE_STORE)
     private readonly supportStateStore: RealtimeSupportStateStore,
   ) {}
@@ -152,6 +163,50 @@ export class RealtimeGateway implements OnGatewayDisconnect {
     }
   }
 
+  @SubscribeMessage(REALTIME_EVENT.TURN_SUBMIT)
+  async handleTurnSubmit(
+    @ConnectedSocket() client: WebSocket,
+    @MessageBody() payload: TurnSubmitPayload,
+  ): Promise<void> {
+    const session = this.socketSessions.get(client);
+
+    if (!session || !this.isValidTurnSubmitPayload(payload) || payload.gameRoomId !== session.gameRoomId) {
+      return;
+    }
+
+    try {
+      const currentTurnState = await this.supportStateStore.getCurrentTurnState({
+        gameRoomId: session.gameRoomId,
+      });
+
+      if (!currentTurnState?.currentTurnId || currentTurnState.currentTurnUserId !== session.userId) {
+        return;
+      }
+
+      const turnSubmitEvent = await this.turnSubmitService.submitTurn({
+        gameRoomId: session.gameRoomId,
+        turnId: currentTurnState.currentTurnId,
+        userId: session.userId,
+        occurredAt: payload.occurredAt ?? toSeoulIso(new Date()),
+        files: await this.collectTurnSubmitFiles(
+          payload,
+          session.gameRoomId,
+          currentTurnState.currentTurnId,
+          session.userId,
+        ),
+      });
+
+      if (!turnSubmitEvent) {
+        return;
+      }
+
+      this.emitToRoom(session.gameRoomId, REALTIME_EVENT.TURN_SUBMIT, turnSubmitEvent);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'unknown turn-submit error';
+      this.logger.warn(`Failed to process turn-submit: ${message}`);
+    }
+  }
+
   async handleDisconnect(client: WebSocket): Promise<void> {
     const session = this.socketSessions.get(client);
 
@@ -236,10 +291,33 @@ export class RealtimeGateway implements OnGatewayDisconnect {
     return false;
   }
 
+  public emitToRoom(
+    gameRoomId: string,
+    event: string,
+    data:
+      | RoomParticipantsUpdatedEvent
+      | CodeUpdatedEvent
+      | TurnSubmitEvent
+      | TurnEvaluatedEvent
+      | TurnChangedEvent
+      | GameStateUpdatedEvent
+      | MissionResultEvent,
+    excludedClient?: WebSocket,
+  ): void {
+    this.broadcastToRoom(gameRoomId, event, data, excludedClient);
+  }
+
   private sendEvent(
     client: WebSocket,
     event: string,
-    data: RoomParticipantsUpdatedEvent | CodeUpdatedEvent,
+    data:
+      | RoomParticipantsUpdatedEvent
+      | CodeUpdatedEvent
+      | TurnSubmitEvent
+      | TurnEvaluatedEvent
+      | TurnChangedEvent
+      | GameStateUpdatedEvent
+      | MissionResultEvent,
   ): void {
     if (client.readyState !== WebSocket.OPEN) {
       return;
@@ -256,7 +334,13 @@ export class RealtimeGateway implements OnGatewayDisconnect {
   private broadcastToRoom(
     gameRoomId: string,
     event: string,
-    data: CodeUpdatedEvent,
+    data:
+      | CodeUpdatedEvent
+      | TurnSubmitEvent
+      | TurnEvaluatedEvent
+      | TurnChangedEvent
+      | GameStateUpdatedEvent
+      | MissionResultEvent,
     excludedClient?: WebSocket,
   ): void {
     const roomSockets = this.roomSessions.get(gameRoomId);
@@ -325,6 +409,52 @@ export class RealtimeGateway implements OnGatewayDisconnect {
       this.hasText(payload.filePath) &&
       typeof payload.content === 'string'
     );
+  }
+
+  private isValidTurnSubmitPayload(payload: TurnSubmitPayload | undefined): payload is TurnSubmitPayload {
+    if (!this.hasText(payload?.gameRoomId)) {
+      return false;
+    }
+
+    if (payload.files === undefined) {
+      return true;
+    }
+
+    if (!Array.isArray(payload.files)) {
+      return false;
+    }
+
+    return payload.files.every(
+      (file) => this.hasText(file.filePath) && typeof file.content === 'string',
+    );
+  }
+
+  private async collectTurnSubmitFiles(
+    payload: TurnSubmitPayload,
+    gameRoomId: string,
+    turnId: string,
+    userId: string,
+  ): Promise<RealtimeFileContentBuffer[]> {
+    const bufferedFiles = await this.supportStateStore.listLatestFileContents({
+      gameRoomId,
+      turnId,
+    });
+    const filesByPath = new Map(
+      bufferedFiles.map((file) => [file.filePath, file] as const),
+    );
+
+    for (const file of payload.files ?? []) {
+      filesByPath.set(file.filePath, {
+        gameRoomId,
+        turnId,
+        userId,
+        filePath: file.filePath,
+        content: file.content,
+        occurredAt: payload.occurredAt ?? toSeoulIso(new Date()),
+      });
+    }
+
+    return Array.from(filesByPath.values());
   }
 
   private async syncCurrentTurnStateFromGameState(

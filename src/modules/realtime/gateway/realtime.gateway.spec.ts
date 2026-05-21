@@ -7,17 +7,21 @@ import { GameRoomParticipantMembershipStatus, GameRoomParticipantRole } from '..
 import { RealtimeModule } from '../realtime.module';
 import {
   REALTIME_AUTH_SERVICE,
+  REALTIME_ASSISTIVE_MESSAGE_SERVICE,
   REALTIME_DISCONNECT_SERVICE,
   REALTIME_ROOM_ACCESS_SERVICE,
   REALTIME_SUPPORT_STATE_STORE,
+  REALTIME_TURN_SUBMIT_SERVICE,
   REALTIME_TURN_EDIT_SERVICE,
 } from '../service/realtime.constants';
 import {
   RealtimeAuthService,
+  RealtimeAssistiveMessageService,
   RealtimeDisconnectService,
   RealtimeJoinRoomState,
   RealtimeRoomAccessService,
   RealtimeSupportStateStore,
+  RealtimeTurnSubmitService,
   RealtimeTurnEditService,
 } from '../service/realtime.interfaces';
 
@@ -28,6 +32,8 @@ describe('RealtimeGateway', () => {
   let roomAccessService: jest.Mocked<RealtimeRoomAccessService>;
   let disconnectService: jest.Mocked<RealtimeDisconnectService>;
   let turnEditService: jest.Mocked<RealtimeTurnEditService>;
+  let turnSubmitService: jest.Mocked<RealtimeTurnSubmitService>;
+  let assistiveMessageService: jest.Mocked<RealtimeAssistiveMessageService>;
   let supportStateStore: RealtimeSupportStateStore;
 
   beforeEach(async () => {
@@ -43,6 +49,12 @@ describe('RealtimeGateway', () => {
     turnEditService = {
       authorizeCodeChange: jest.fn(),
     };
+    turnSubmitService = {
+      submitTurn: jest.fn(),
+    };
+    assistiveMessageService = {
+      buildNotice: jest.fn(),
+    };
 
     const moduleRef = await Test.createTestingModule({
       imports: [RealtimeModule],
@@ -55,6 +67,10 @@ describe('RealtimeGateway', () => {
       .useValue(disconnectService)
       .overrideProvider(REALTIME_TURN_EDIT_SERVICE)
       .useValue(turnEditService)
+      .overrideProvider(REALTIME_TURN_SUBMIT_SERVICE)
+      .useValue(turnSubmitService)
+      .overrideProvider(REALTIME_ASSISTIVE_MESSAGE_SERVICE)
+      .useValue(assistiveMessageService)
       .compile();
 
     app = moduleRef.createNestApplication();
@@ -374,6 +390,87 @@ describe('RealtimeGateway', () => {
     ownerSocket.close();
     watcherSocket.close();
   });
+
+  it('forwards turn-submit through the support hook with the latest buffered files', async () => {
+    authService.validateAccessToken.mockImplementation(async (accessToken) => ({
+      userId: accessToken === 'owner-token' ? 'user-001' : 'user-002',
+    }));
+    roomAccessService.getJoinRoomState.mockResolvedValue(createJoinRoomStateInProgress());
+    turnEditService.authorizeCodeChange.mockResolvedValue({
+      isEditable: true,
+      currentTurnId: 'turn-001',
+      currentTurnUserId: 'user-001',
+    });
+    turnSubmitService.submitTurn.mockResolvedValue({
+      gameRoomId: 'room-001',
+      turnId: 'turn-001',
+      userId: 'user-001',
+      occurredAt: '2026-05-22T11:00:00+09:00',
+    });
+
+    const ownerSocket = await connectClient(port);
+    const watcherSocket = await connectClient(port);
+
+    const ownerJoinMessage = waitForMessage(ownerSocket);
+    sendJoinRoom(ownerSocket, {
+      accessToken: 'owner-token',
+      gameRoomId: 'room-001',
+      userId: 'user-001',
+    });
+    await ownerJoinMessage;
+
+    const watcherJoinMessage = waitForMessage(watcherSocket);
+    sendJoinRoom(watcherSocket, {
+      accessToken: 'watcher-token',
+      gameRoomId: 'room-001',
+      userId: 'user-002',
+    });
+    await watcherJoinMessage;
+
+    sendCodeChange(ownerSocket, {
+      gameRoomId: 'room-001',
+      userId: 'user-001',
+      sessionId: 'session-001',
+      filePath: 'main.py',
+      content: 'print(\"submit\")\n',
+      occurredAt: '2026-05-22T10:59:00+09:00',
+    });
+    await waitForMessage(watcherSocket);
+
+    const submitEvent = waitForMessage(watcherSocket);
+    sendTurnSubmit(ownerSocket, {
+      gameRoomId: 'room-001',
+      occurredAt: '2026-05-22T11:00:00+09:00',
+    });
+
+    await expect(submitEvent).resolves.toEqual({
+      event: 'turn-submit',
+      data: {
+        gameRoomId: 'room-001',
+        turnId: 'turn-001',
+        userId: 'user-001',
+        occurredAt: '2026-05-22T11:00:00+09:00',
+      },
+    });
+    expect(turnSubmitService.submitTurn).toHaveBeenCalledWith({
+      gameRoomId: 'room-001',
+      turnId: 'turn-001',
+      userId: 'user-001',
+      occurredAt: '2026-05-22T11:00:00+09:00',
+      files: [
+        expect.objectContaining({
+          gameRoomId: 'room-001',
+          turnId: 'turn-001',
+          userId: 'user-001',
+          filePath: 'main.py',
+          content: 'print(\"submit\")\n',
+        }),
+      ],
+    });
+
+    ownerSocket.close();
+    watcherSocket.close();
+  });
 });
 
 async function connectClient(port: number): Promise<WebSocket> {
@@ -410,6 +507,21 @@ function sendCodeChange(
   socket.send(
     JSON.stringify({
       event: 'code-change',
+      data: payload,
+    }),
+  );
+}
+
+function sendTurnSubmit(
+  socket: WebSocket,
+  payload: {
+    gameRoomId: string;
+    occurredAt: string;
+  },
+): void {
+  socket.send(
+    JSON.stringify({
+      event: 'turn-submit',
       data: payload,
     }),
   );

@@ -1,10 +1,15 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import {
+  RealtimeAssistiveMessageRequest,
+  RealtimeAssistiveMessageService,
   RealtimeAuthenticatedUser,
   RealtimeAuthService,
   RealtimeDisconnectService,
   RealtimeJoinRoomState,
   RealtimeRoomAccessService,
+  RealtimeTurnSubmitRequest,
+  TurnSubmitEvent,
+  RealtimeTurnSubmitService,
   RealtimeTurnEditAuthorization,
   RealtimeTurnEditService,
 } from './realtime.interfaces';
@@ -42,5 +47,23 @@ export class DefaultRealtimeTurnEditService implements RealtimeTurnEditService {
       currentTurnId: null,
       currentTurnUserId: null,
     };
+  }
+}
+
+@Injectable()
+export class DefaultRealtimeTurnSubmitService implements RealtimeTurnSubmitService {
+  async submitTurn(
+    _input: RealtimeTurnSubmitRequest,
+  ): Promise<TurnSubmitEvent | null> {
+    throw new InternalServerErrorException('Realtime turn submit service is not configured');
+  }
+}
+
+@Injectable()
+export class DefaultRealtimeAssistiveMessageService
+  implements RealtimeAssistiveMessageService
+{
+  async buildNotice(_input: RealtimeAssistiveMessageRequest) {
+    return null;
   }
 }

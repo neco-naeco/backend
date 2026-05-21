@@ -4,16 +4,21 @@ import { WebsocketIntegrationModule } from '../../integrations/websocket/websock
 import { RealtimeGateway } from './gateway/realtime.gateway';
 import {
   DefaultRealtimeAuthService,
+  DefaultRealtimeAssistiveMessageService,
   DefaultRealtimeDisconnectService,
   DefaultRealtimeRoomAccessService,
+  DefaultRealtimeTurnSubmitService,
   DefaultRealtimeTurnEditService,
 } from './service/realtime-defaults.service';
 import {
+  REALTIME_ASSISTIVE_MESSAGE_SERVICE,
   REALTIME_AUTH_SERVICE,
   REALTIME_DISCONNECT_SERVICE,
   REALTIME_ROOM_ACCESS_SERVICE,
   REALTIME_TURN_EDIT_SERVICE,
+  REALTIME_TURN_SUBMIT_SERVICE,
 } from './service/realtime.constants';
+import { RealtimeEventSupportService } from './service/realtime-event-support.service';
 
 /**
  * Responsibilities: establish WebSocket connections, authenticate join-room,
@@ -29,6 +34,9 @@ import {
     DefaultRealtimeRoomAccessService,
     DefaultRealtimeDisconnectService,
     DefaultRealtimeTurnEditService,
+    DefaultRealtimeTurnSubmitService,
+    DefaultRealtimeAssistiveMessageService,
+    RealtimeEventSupportService,
     {
       provide: REALTIME_AUTH_SERVICE,
       useExisting: DefaultRealtimeAuthService,
@@ -45,12 +53,23 @@ import {
       provide: REALTIME_TURN_EDIT_SERVICE,
       useExisting: DefaultRealtimeTurnEditService,
     },
+    {
+      provide: REALTIME_TURN_SUBMIT_SERVICE,
+      useExisting: DefaultRealtimeTurnSubmitService,
+    },
+    {
+      provide: REALTIME_ASSISTIVE_MESSAGE_SERVICE,
+      useExisting: DefaultRealtimeAssistiveMessageService,
+    },
   ],
   exports: [
     REALTIME_AUTH_SERVICE,
     REALTIME_ROOM_ACCESS_SERVICE,
     REALTIME_DISCONNECT_SERVICE,
     REALTIME_TURN_EDIT_SERVICE,
+    REALTIME_TURN_SUBMIT_SERVICE,
+    REALTIME_ASSISTIVE_MESSAGE_SERVICE,
+    RealtimeEventSupportService,
   ],
 })
 export class RealtimeModule {}
