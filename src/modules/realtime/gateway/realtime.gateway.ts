@@ -45,6 +45,7 @@ interface SocketSession {
 export class RealtimeGateway implements OnGatewayDisconnect {
   private readonly logger = new Logger(RealtimeGateway.name);
   private readonly roomSessions = new Map<string, Set<WebSocket>>();
+  private readonly roomUserSessions = new Map<string, Map<string, Set<WebSocket>>>();
   private readonly socketSessions = new WeakMap<WebSocket, SocketSession>();
 
   constructor(
@@ -158,8 +159,16 @@ export class RealtimeGateway implements OnGatewayDisconnect {
       return;
     }
 
-    this.unbindSocketFromRoom(client, session.gameRoomId);
+    const hasRemainingUserSockets = this.unbindSocketFromRoom(
+      client,
+      session.gameRoomId,
+      session.userId,
+    );
     this.socketSessions.delete(client);
+
+    if (hasRemainingUserSockets) {
+      return;
+    }
 
     try {
       await this.disconnectService.handleDisconnect({
@@ -176,26 +185,55 @@ export class RealtimeGateway implements OnGatewayDisconnect {
     const currentSession = this.socketSessions.get(client);
 
     if (currentSession) {
-      this.unbindSocketFromRoom(client, currentSession.gameRoomId);
+      this.unbindSocketFromRoom(client, currentSession.gameRoomId, currentSession.userId);
     }
 
     const roomSockets = this.roomSessions.get(session.gameRoomId) ?? new Set<WebSocket>();
     roomSockets.add(client);
     this.roomSessions.set(session.gameRoomId, roomSockets);
+
+    const roomUsers = this.roomUserSessions.get(session.gameRoomId) ?? new Map<string, Set<WebSocket>>();
+    const userSockets = roomUsers.get(session.userId) ?? new Set<WebSocket>();
+    userSockets.add(client);
+    roomUsers.set(session.userId, userSockets);
+    this.roomUserSessions.set(session.gameRoomId, roomUsers);
     this.socketSessions.set(client, session);
   }
 
-  private unbindSocketFromRoom(client: WebSocket, gameRoomId: string): void {
+  private unbindSocketFromRoom(client: WebSocket, gameRoomId: string, userId: string): boolean {
     const roomSockets = this.roomSessions.get(gameRoomId);
 
-    if (!roomSockets) {
-      return;
+    if (roomSockets) {
+      roomSockets.delete(client);
+      if (roomSockets.size === 0) {
+        this.roomSessions.delete(gameRoomId);
+      }
     }
 
-    roomSockets.delete(client);
-    if (roomSockets.size === 0) {
-      this.roomSessions.delete(gameRoomId);
+    const roomUsers = this.roomUserSessions.get(gameRoomId);
+
+    if (!roomUsers) {
+      return false;
     }
+
+    const userSockets = roomUsers.get(userId);
+
+    if (!userSockets) {
+      return false;
+    }
+
+    userSockets.delete(client);
+
+    if (userSockets.size > 0) {
+      return true;
+    }
+
+    roomUsers.delete(userId);
+    if (roomUsers.size === 0) {
+      this.roomUserSessions.delete(gameRoomId);
+    }
+
+    return false;
   }
 
   private sendEvent(

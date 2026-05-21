@@ -1,0 +1,2 @@
+export const RUNTIME_ADAPTER = Symbol('RUNTIME_ADAPTER');
+export const RUNTIME_COMMAND_RUNNER = Symbol('RUNTIME_COMMAND_RUNNER');
