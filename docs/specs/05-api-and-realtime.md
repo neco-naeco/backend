@@ -21,6 +21,7 @@ Auth request field rules:
 
 - `POST /v1/auth/signup` accepts `passwordHash` as a SHA-256 hex string.
 - `POST /v1/auth/login` accepts `passwordHash` as a SHA-256 hex string.
+- `POST /v1/auth/refresh-token` returns both a new `accessToken` and a new `refreshToken`.
 - On successful signup, the server automatically creates exactly one AI chat session for that user.
 
 Authorization header:
