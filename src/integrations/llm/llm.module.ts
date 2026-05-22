@@ -1,9 +1,19 @@
 import { Module } from '@nestjs/common';
+import { LLM_INTENT_PARSER } from './llm-intent-parser.port';
+import { LlmIntentParserService } from './llm-intent-parser.service';
 
 /**
  * LLM integration adapter.
  * Covers: AI chat intent parsing, feedback generation, judgment assistance.
- * Worker 1 (ai-chat-sessions) will implement the provider.
  */
-@Module({})
+@Module({
+  providers: [
+    LlmIntentParserService,
+    {
+      provide: LLM_INTENT_PARSER,
+      useExisting: LlmIntentParserService,
+    },
+  ],
+  exports: [LLM_INTENT_PARSER, LlmIntentParserService],
+})
 export class LlmIntegrationModule {}

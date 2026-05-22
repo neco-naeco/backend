@@ -1,27 +1,37 @@
-import { HttpStatus, Injectable } from '@nestjs/common';
+import { HttpStatus, Inject, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, FindOptionsWhere, Repository } from 'typeorm';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
 import { toSeoulIso } from '../../common/utils/date.util';
 import {
+  LLM_INTENT_PARSER,
+  type LlmIntentParserPort,
+  type LlmIntentRawResponse,
+} from '../../integrations/llm/llm-intent-parser.port';
+import {
   AiChatMessageSenderType,
   AiChatMessageType,
   AiChatRequestStatus,
+  AiChatRequestType,
 } from '../../shared/enums/ai-chat.enum';
+import type { AiChatCommandResultDto } from '../../shared/dto/ai-chat-command.dto';
+import { AI_CHAT_REQUEST_TYPE_UNPARSED } from './constants/ai-chat-internal.constants';
 import {
   AI_CHAT_ERROR,
   throwAiChatError,
   throwForbiddenAccess,
 } from './constants/ai-chat-error.constants';
-import { AI_CHAT_REQUEST_TYPE_UNPARSED } from './constants/ai-chat-internal.constants';
 import { CreateAiChatMessageDto } from './dto/create-ai-chat-message.dto';
 import { ListAiChatSessionsQueryDto } from './dto/list-ai-chat-sessions-query.dto';
 import { AiChatMessage } from './entity/ai-chat-message.entity';
 import { AiChatRequest } from './entity/ai-chat-request.entity';
 import { AiChatSession } from './entity/ai-chat-session.entity';
-
-const W1_2_ASSISTANT_ACK_CONTENT =
-  '메시지를 저장했습니다. 명령 해석이 완료되면 안내해 드릴게요.';
+import { buildCommandAssistantContent } from './intent/ai-chat-assistant-content';
+import { AiChatCommandResultMapper } from './intent/ai-chat-command-result.mapper';
+import {
+  AiChatIntentValidator,
+  type IntentValidationUnsupported,
+} from './intent/ai-chat-intent.validator';
 
 export interface AiChatSessionListItem {
   aiChatSessionId: string;
@@ -53,11 +63,14 @@ export interface CreateAiChatMessageResult {
   requestStatus: string;
   userMessage: AiChatMessageItem;
   assistantMessage: AiChatMessageItem;
-  commandResult: null;
+  commandResult: AiChatCommandResultDto | null;
 }
 
 @Injectable()
 export class AiChatSessionsService {
+  private readonly intentValidator = new AiChatIntentValidator();
+  private readonly commandResultMapper = new AiChatCommandResultMapper();
+
   constructor(
     @InjectRepository(AiChatSession)
     private readonly aiChatSessionRepository: Repository<AiChatSession>,
@@ -66,6 +79,8 @@ export class AiChatSessionsService {
     @InjectRepository(AiChatRequest)
     private readonly aiChatRequestRepository: Repository<AiChatRequest>,
     private readonly dataSource: DataSource,
+    @Inject(LLM_INTENT_PARSER)
+    private readonly llmIntentParser: LlmIntentParserPort,
   ) {}
 
   async listSessions(
@@ -111,60 +126,209 @@ export class AiChatSessionsService {
     aiChatSessionId: string,
     dto: CreateAiChatMessageDto,
   ): Promise<CreateAiChatMessageResult> {
-    await this.requireOwnedSession(user.userId, aiChatSessionId);
-
+    const session = await this.requireOwnedSession(user.userId, aiChatSessionId);
     const now = new Date();
+
+    const bootstrap = await this.dataSource.transaction(async (manager) =>
+      this.persistUserMessageTurn(
+        manager.getRepository(AiChatRequest),
+        manager.getRepository(AiChatMessage),
+        aiChatSessionId,
+        user,
+        dto.message,
+        now,
+      ),
+    );
+
+    const rawIntent = await this.llmIntentParser.parseUserMessage({
+      message: dto.message,
+      gameRoomId: session.gameRoomId,
+    });
+
+    const validation = this.intentValidator.validate(rawIntent);
+
+    if (validation.outcome === 'unsupported') {
+      await this.persistUnsupportedRequestHistory(
+        bootstrap.savedRequest.id,
+        validation,
+        rawIntent,
+        now,
+      );
+      throwAiChatError(
+        validation.errorCode,
+        validation.content,
+        HttpStatus.BAD_REQUEST,
+      );
+    }
 
     return this.dataSource.transaction(async (manager) => {
       const requestRepo = manager.getRepository(AiChatRequest);
       const messageRepo = manager.getRepository(AiChatMessage);
 
-      const request = requestRepo.create({
-        aiChatSessionId,
-        requestType: AI_CHAT_REQUEST_TYPE_UNPARSED,
-        sourceMessageId: null,
-        requestPayload: { message: dto.message },
-        responsePayload: null,
-        status: AiChatRequestStatus.RECEIVED,
-        requestedAt: now,
-        respondedAt: null,
+      const savedRequest = await requestRepo.findOneOrFail({
+        where: { id: bootstrap.savedRequest.id },
       });
-      const savedRequest = await requestRepo.save(request);
 
-      const userMessage = messageRepo.create({
-        aiChatSessionId,
-        aiChatRequestId: savedRequest.id,
-        senderType: AiChatMessageSenderType.USER,
-        senderUserId: user.userId,
-        messageType: AiChatMessageType.TEXT,
-        content: dto.message,
-        metadataJson: null,
-      });
-      const savedUserMessage = await messageRepo.save(userMessage);
+      if (validation.outcome === 'clarification') {
+        return this.finalizeFailedParseTurn(
+          requestRepo,
+          messageRepo,
+          savedRequest,
+          bootstrap.savedUserMessage,
+          validation.content,
+          { parseOutcome: 'ambiguous' },
+          now,
+        );
+      }
+
+      const { command, assistantHint } = validation;
+      const assistant = buildCommandAssistantContent(command, assistantHint);
+      const commandResult = this.commandResultMapper.toPendingResult(command);
+
+      savedRequest.requestType = command.requestType;
+      savedRequest.requestPayload = {
+        message: dto.message,
+        command,
+        llmRaw: rawIntent,
+      };
+      savedRequest.responsePayload = {
+        extractedCommand: command,
+        commandResult,
+      };
+      savedRequest.status = AiChatRequestStatus.COMPLETED;
+      savedRequest.respondedAt = now;
+      await requestRepo.save(savedRequest);
 
       const assistantMessage = messageRepo.create({
         aiChatSessionId,
         aiChatRequestId: savedRequest.id,
         senderType: AiChatMessageSenderType.ASSISTANT,
         senderUserId: null,
-        messageType: AiChatMessageType.SYSTEM_NOTICE,
-        content: W1_2_ASSISTANT_ACK_CONTENT,
-        metadataJson: { intentParsingPending: true },
+        messageType: AiChatMessageType.COMMAND_RESULT,
+        content: assistant.content,
+        metadataJson: assistant.metadata,
       });
       const savedAssistantMessage = await messageRepo.save(assistantMessage);
 
-      savedRequest.sourceMessageId = savedUserMessage.id;
-      await requestRepo.save(savedRequest);
-
-      // api-spec §9: RECEIVED responses omit requestType until intent parsing (W1-3).
       return {
         aiChatRequestId: savedRequest.id,
-        requestStatus: AiChatRequestStatus.RECEIVED,
-        userMessage: this.toMessageItem(savedUserMessage),
+        requestType: command.requestType,
+        requestStatus: AiChatRequestStatus.COMPLETED,
+        userMessage: this.toMessageItem(bootstrap.savedUserMessage),
         assistantMessage: this.toMessageItem(savedAssistantMessage),
-        commandResult: null,
+        commandResult,
       };
     });
+  }
+
+  private async persistUnsupportedRequestHistory(
+    aiChatRequestId: string,
+    validation: IntentValidationUnsupported,
+    rawIntent: LlmIntentRawResponse,
+    now: Date,
+  ): Promise<void> {
+    await this.dataSource.transaction(async (manager) => {
+      const requestRepo = manager.getRepository(AiChatRequest);
+      const savedRequest = await requestRepo.findOneOrFail({
+        where: { id: aiChatRequestId },
+      });
+
+      savedRequest.requestType = AI_CHAT_REQUEST_TYPE_UNPARSED;
+      savedRequest.requestPayload = {
+        ...(typeof savedRequest.requestPayload === 'object' && savedRequest.requestPayload !== null
+          ? savedRequest.requestPayload
+          : {}),
+        llmRaw: rawIntent,
+      };
+      savedRequest.responsePayload = {
+        parseOutcome: 'unsupported',
+        errorCode: validation.errorCode,
+        rawRequestType: validation.rawRequestType,
+        llmRaw: rawIntent,
+      };
+      savedRequest.status = AiChatRequestStatus.FAILED;
+      savedRequest.respondedAt = now;
+      await requestRepo.save(savedRequest);
+    });
+  }
+
+  private async persistUserMessageTurn(
+    requestRepo: Repository<AiChatRequest>,
+    messageRepo: Repository<AiChatMessage>,
+    aiChatSessionId: string,
+    user: AuthenticatedUser,
+    userContent: string,
+    now: Date,
+  ): Promise<{ savedRequest: AiChatRequest; savedUserMessage: AiChatMessage }> {
+    const request = requestRepo.create({
+      aiChatSessionId,
+      requestType: AI_CHAT_REQUEST_TYPE_UNPARSED,
+      sourceMessageId: null,
+      requestPayload: { message: userContent },
+      responsePayload: null,
+      status: AiChatRequestStatus.RECEIVED,
+      requestedAt: now,
+      respondedAt: null,
+    });
+    const savedRequest = await requestRepo.save(request);
+
+    const userMessage = messageRepo.create({
+      aiChatSessionId,
+      aiChatRequestId: savedRequest.id,
+      senderType: AiChatMessageSenderType.USER,
+      senderUserId: user.userId,
+      messageType: AiChatMessageType.TEXT,
+      content: userContent,
+      metadataJson: null,
+    });
+    const savedUserMessage = await messageRepo.save(userMessage);
+
+    savedRequest.sourceMessageId = savedUserMessage.id;
+    await requestRepo.save(savedRequest);
+
+    return { savedRequest, savedUserMessage };
+  }
+
+  private async finalizeFailedParseTurn(
+    requestRepo: Repository<AiChatRequest>,
+    messageRepo: Repository<AiChatMessage>,
+    savedRequest: AiChatRequest,
+    savedUserMessage: AiChatMessage,
+    assistantContent: string,
+    responseMeta: Record<string, unknown>,
+    now: Date,
+  ): Promise<CreateAiChatMessageResult> {
+    const nominalType = AiChatRequestType.ROOM_CREATE;
+    const commandResult = this.commandResultMapper.toFailedResult(nominalType);
+
+    savedRequest.requestType = nominalType;
+    savedRequest.responsePayload = {
+      ...responseMeta,
+      commandResult,
+    };
+    savedRequest.status = AiChatRequestStatus.FAILED;
+    savedRequest.respondedAt = now;
+    await requestRepo.save(savedRequest);
+
+    const assistantMessage = messageRepo.create({
+      aiChatSessionId: savedRequest.aiChatSessionId,
+      aiChatRequestId: savedRequest.id,
+      senderType: AiChatMessageSenderType.ASSISTANT,
+      senderUserId: null,
+      messageType: AiChatMessageType.TEXT,
+      content: assistantContent,
+      metadataJson: { parseOutcome: responseMeta.parseOutcome },
+    });
+    const savedAssistantMessage = await messageRepo.save(assistantMessage);
+
+    return {
+      aiChatRequestId: savedRequest.id,
+      requestType: nominalType,
+      requestStatus: AiChatRequestStatus.FAILED,
+      userMessage: this.toMessageItem(savedUserMessage),
+      assistantMessage: this.toMessageItem(savedAssistantMessage),
+      commandResult,
+    };
   }
 
   private async requireOwnedSession(
