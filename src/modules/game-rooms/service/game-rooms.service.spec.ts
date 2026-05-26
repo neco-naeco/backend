@@ -1,0 +1,348 @@
+/// <reference types="jest" />
+
+import { DataSource, In, Repository } from 'typeorm';
+import { GameRoomMissionsService } from '@modules/game-room-missions/service/game-room-missions.service';
+import { GameRoomParticipantEntity } from '@modules/game-room-participants/entity/game-room-participant.entity';
+import { GameRoomsService } from './game-rooms.service';
+import { GameRoomEntity } from '../entity/game-room.entity';
+import {
+  GameRoomParticipantMembershipStatus,
+  GameRoomParticipantRole,
+  GameRoomStatus,
+} from '@shared/enums';
+
+describe('GameRoomsService', () => {
+  let service: GameRoomsService;
+  let roomRepository: jest.Mocked<
+    Pick<Repository<GameRoomEntity>, 'create' | 'save' | 'findOne'>
+  >;
+  let participantRepository: jest.Mocked<
+    Pick<
+      Repository<GameRoomParticipantEntity>,
+      'count' | 'create' | 'find' | 'findOne' | 'save'
+    >
+  >;
+  let gameRoomMissionsService: jest.Mocked<
+    Pick<GameRoomMissionsService, 'createMissionForGameStart'>
+  >;
+  let manager: { getRepository: jest.Mock; query: jest.Mock };
+  let dataSource: { transaction: jest.Mock; getRepository: jest.Mock };
+
+  beforeEach(() => {
+    roomRepository = {
+      create: jest.fn(),
+      findOne: jest.fn(),
+      save: jest.fn(),
+    };
+
+    participantRepository = {
+      count: jest.fn(),
+      create: jest.fn(),
+      find: jest.fn(),
+      findOne: jest.fn(),
+      save: jest.fn(),
+    };
+
+    gameRoomMissionsService = {
+      createMissionForGameStart: jest.fn(),
+    };
+
+    manager = {
+      getRepository: jest.fn((entity) => {
+        if (entity === GameRoomEntity) {
+          return roomRepository;
+        }
+
+        return participantRepository;
+      }),
+      query: jest.fn(),
+    };
+
+    dataSource = {
+      transaction: jest.fn(async (callback) => callback(manager)),
+      getRepository: jest.fn(() => participantRepository),
+    };
+
+    service = new GameRoomsService(
+      dataSource as unknown as DataSource,
+      gameRoomMissionsService as unknown as GameRoomMissionsService,
+    );
+  });
+
+  it('lists only rooms accessible to the authenticated user', async () => {
+    participantRepository.find.mockResolvedValue([
+      {
+        gameRoom: {
+          id: 'room-1',
+          ownerUserId: 'owner-1',
+          status: GameRoomStatus.WAITING,
+        },
+      } as GameRoomParticipantEntity,
+      {
+        gameRoom: {
+          id: 'room-2',
+          ownerUserId: 'owner-2',
+          status: GameRoomStatus.IN_PROGRESS,
+        },
+      } as GameRoomParticipantEntity,
+    ]);
+
+    const result = await service.listAccessibleRooms('owner-1');
+
+    expect(dataSource.getRepository).toHaveBeenCalledWith(GameRoomParticipantEntity);
+    expect(participantRepository.find).toHaveBeenCalledWith({
+      relations: { gameRoom: true },
+      where: {
+        userId: 'owner-1',
+        membershipStatus: In([
+          GameRoomParticipantMembershipStatus.INVITED,
+          GameRoomParticipantMembershipStatus.JOINED,
+        ]),
+      },
+      order: {
+        createdAt: 'ASC',
+      },
+    });
+    expect(result.map((room) => room.id)).toEqual(['room-1', 'room-2']);
+  });
+
+  it('returns an empty list when the authenticated user cannot access any room', async () => {
+    participantRepository.find.mockResolvedValue([]);
+
+    await expect(service.listAccessibleRooms('owner-1')).resolves.toEqual([]);
+  });
+
+  it('surfaces multiple waiting rooms as an abnormal list shape instead of changing the contract', async () => {
+    participantRepository.find.mockResolvedValue([
+      {
+        gameRoom: {
+          id: 'room-1',
+          ownerUserId: 'owner-1',
+          status: GameRoomStatus.WAITING,
+        },
+      } as GameRoomParticipantEntity,
+      {
+        gameRoom: {
+          id: 'room-2',
+          ownerUserId: 'owner-2',
+          status: GameRoomStatus.WAITING,
+        },
+      } as GameRoomParticipantEntity,
+    ]);
+
+    const result = await service.listAccessibleRooms('owner-1');
+
+    expect(result.map((room) => room.id)).toEqual(['room-1', 'room-2']);
+    expect(
+      result.filter((room) => room.status === GameRoomStatus.WAITING),
+    ).toHaveLength(2);
+  });
+
+  it('creates a waiting room with an owner participant', async () => {
+    participantRepository.find.mockResolvedValue([]);
+    roomRepository.create.mockReturnValue({
+      ownerUserId: 'owner-1',
+      status: GameRoomStatus.WAITING,
+      difficulty: 'EASY',
+      timeLimitSeconds: 600,
+      maxStrikeCount: 3,
+      minParticipants: 2,
+      maxParticipants: 4,
+    } as GameRoomEntity);
+    roomRepository.save.mockResolvedValue({
+      id: 'room-1',
+      ownerUserId: 'owner-1',
+      status: GameRoomStatus.WAITING,
+    } as GameRoomEntity);
+    participantRepository.create.mockReturnValue({
+      gameRoomId: 'room-1',
+      userId: 'owner-1',
+      role: GameRoomParticipantRole.OWNER,
+      membershipStatus: GameRoomParticipantMembershipStatus.JOINED,
+    } as GameRoomParticipantEntity);
+
+    const result = await service.createRoom({
+      ownerUserId: 'owner-1',
+      difficulty: 'EASY',
+      timeLimitSeconds: 600,
+      maxStrikeCount: 3,
+      minParticipants: 2,
+      maxParticipants: 4,
+    });
+
+    expect(result.id).toBe('room-1');
+    expect(dataSource.transaction).toHaveBeenCalled();
+    expect(manager.query).toHaveBeenCalledWith(
+      'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
+      ['owner-1'],
+    );
+    expect(roomRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ownerUserId: 'owner-1',
+        status: GameRoomStatus.WAITING,
+      }),
+    );
+    expect(participantRepository.create).toHaveBeenCalledWith({
+      gameRoomId: 'room-1',
+      userId: 'owner-1',
+      role: GameRoomParticipantRole.OWNER,
+      membershipStatus: GameRoomParticipantMembershipStatus.JOINED,
+    });
+  });
+
+  it('rejects creating a room when the owner already belongs to a waiting room', async () => {
+    participantRepository.find.mockResolvedValue([
+      {
+        id: 'participant-1',
+        gameRoomId: 'room-existing',
+      } as GameRoomParticipantEntity,
+    ]);
+
+    await expect(
+      service.createRoom({
+        ownerUserId: 'owner-1',
+        difficulty: 'EASY',
+        timeLimitSeconds: 600,
+        maxStrikeCount: 3,
+        minParticipants: 2,
+        maxParticipants: 4,
+      }),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({
+        code: 'WAITING_ROOM_MEMBERSHIP_CONFLICT',
+      }),
+    });
+
+    expect(dataSource.transaction).toHaveBeenCalled();
+    expect(roomRepository.save).not.toHaveBeenCalled();
+    expect(participantRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('allows only the joined owner to start a waiting room', async () => {
+    roomRepository.findOne.mockResolvedValue({
+      id: 'room-1',
+      ownerUserId: 'owner-1',
+      status: GameRoomStatus.WAITING,
+      difficulty: 'EASY',
+      minParticipants: 2,
+      maxParticipants: 4,
+    } as GameRoomEntity);
+    participantRepository.findOne.mockResolvedValue(null);
+
+    await expect(
+      service.startGame({
+        actorUserId: 'other-user',
+        gameRoomId: 'room-1',
+        missionTemplateId: 'template-1',
+        runtimeContainerId: 'container-1',
+      }),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({
+        code: 'GAME_ROOM_OWNER_REQUIRED',
+      }),
+    });
+
+    expect(gameRoomMissionsService.createMissionForGameStart).not.toHaveBeenCalled();
+  });
+
+  it('rejects game start when the room does not meet the minimum participant count', async () => {
+    roomRepository.findOne.mockResolvedValue({
+      id: 'room-1',
+      ownerUserId: 'owner-1',
+      status: GameRoomStatus.WAITING,
+      difficulty: 'EASY',
+      minParticipants: 3,
+      maxParticipants: 4,
+    } as GameRoomEntity);
+    participantRepository.findOne.mockResolvedValue({
+      id: 'owner-participant-1',
+      gameRoomId: 'room-1',
+      userId: 'owner-1',
+      role: GameRoomParticipantRole.OWNER,
+      membershipStatus: GameRoomParticipantMembershipStatus.JOINED,
+    } as GameRoomParticipantEntity);
+    participantRepository.count.mockResolvedValue(2);
+
+    await expect(
+      service.startGame({
+        actorUserId: 'owner-1',
+        gameRoomId: 'room-1',
+        missionTemplateId: 'template-1',
+        runtimeContainerId: 'container-1',
+      }),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({
+        code: 'MINIMUM_PARTICIPANTS_NOT_MET',
+      }),
+    });
+
+    expect(gameRoomMissionsService.createMissionForGameStart).not.toHaveBeenCalled();
+  });
+
+  it('creates the room mission and marks the room in progress when start validation passes', async () => {
+    roomRepository.findOne.mockResolvedValue({
+      id: 'room-1',
+      ownerUserId: 'owner-1',
+      status: GameRoomStatus.WAITING,
+      difficulty: 'EASY',
+      minParticipants: 2,
+      maxParticipants: 4,
+    } as GameRoomEntity);
+    participantRepository.findOne.mockResolvedValue({
+      id: 'owner-participant-1',
+      gameRoomId: 'room-1',
+      userId: 'owner-1',
+      role: GameRoomParticipantRole.OWNER,
+      membershipStatus: GameRoomParticipantMembershipStatus.JOINED,
+    } as GameRoomParticipantEntity);
+    participantRepository.count.mockResolvedValue(2);
+    gameRoomMissionsService.createMissionForGameStart.mockResolvedValue({
+      id: 'mission-1',
+    } as never);
+    roomRepository.save.mockImplementation(async (room) => room as never);
+
+    const result = await service.startGame({
+      actorUserId: 'owner-1',
+      gameRoomId: 'room-1',
+      missionTemplateId: 'template-1',
+      runtimeContainerId: 'container-1',
+    });
+
+    expect(manager.query).toHaveBeenNthCalledWith(
+      1,
+      'SELECT pg_advisory_xact_lock(hashtextextended($1, 1))',
+      ['room-1'],
+    );
+    expect(manager.query).toHaveBeenNthCalledWith(
+      2,
+      'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
+      ['owner-1'],
+    );
+    expect(participantRepository.count).toHaveBeenCalledWith({
+      where: {
+        gameRoomId: 'room-1',
+        membershipStatus: GameRoomParticipantMembershipStatus.JOINED,
+      },
+    });
+    expect(gameRoomMissionsService.createMissionForGameStart).toHaveBeenCalledWith({
+      manager,
+      gameRoomId: 'room-1',
+      roomDifficulty: 'EASY',
+      missionTemplateId: 'template-1',
+      runtimeContainerId: 'container-1',
+    });
+    expect(roomRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'room-1',
+        status: GameRoomStatus.IN_PROGRESS,
+      }),
+    );
+    expect(result).toEqual({
+      gameRoom: expect.objectContaining({
+        id: 'room-1',
+        status: GameRoomStatus.IN_PROGRESS,
+      }),
+      gameRoomMissionId: 'mission-1',
+    });
+  });
+});

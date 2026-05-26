@@ -13,6 +13,8 @@ import jwtConfig from './common/config/jwt.config';
 import redisConfig from './common/config/redis.config';
 import llmConfig from './common/config/llm.config';
 import runtimeConfig from './common/config/runtime.config';
+import { GameRoomsModule } from './modules/game-rooms/game-rooms.module';
+import { GameRoomParticipantsModule } from './modules/game-room-participants/game-room-participants.module';
 
 @Module({
   imports: [
@@ -26,6 +28,8 @@ import runtimeConfig from './common/config/runtime.config';
     AuthModule,
     PromptTemplateModule,
     AiChatSessionsModule,
+    GameRoomsModule,
+    GameRoomParticipantsModule,
   ],
   providers: [
     {
