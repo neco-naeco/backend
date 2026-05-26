@@ -1,4 +1,5 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import { TurnsService } from '@modules/turns/service/turns.service';
 import {
   RealtimeAssistiveMessageRequest,
   RealtimeAssistiveMessageService,
@@ -8,11 +9,11 @@ import {
   RealtimeJoinRoomState,
   RealtimeRoomAccessService,
   RealtimeTurnSubmitRequest,
-  TurnSubmitEvent,
   RealtimeTurnSubmitService,
   RealtimeTurnEditAuthorization,
   RealtimeTurnEditService,
 } from './realtime.interfaces';
+import { RealtimeEventSupportService } from './realtime-event-support.service';
 
 @Injectable()
 export class DefaultRealtimeAuthService implements RealtimeAuthService {
@@ -52,10 +53,40 @@ export class DefaultRealtimeTurnEditService implements RealtimeTurnEditService {
 
 @Injectable()
 export class DefaultRealtimeTurnSubmitService implements RealtimeTurnSubmitService {
-  async submitTurn(
-    _input: RealtimeTurnSubmitRequest,
-  ): Promise<TurnSubmitEvent | null> {
-    throw new InternalServerErrorException('Realtime turn submit service is not configured');
+  constructor(
+    private readonly turnsService: TurnsService,
+    private readonly realtimeEventSupportService: RealtimeEventSupportService,
+  ) {}
+
+  async submitTurn(input: RealtimeTurnSubmitRequest): Promise<void> {
+    const result = await this.turnsService.submitTurn({
+      gameRoomId: input.gameRoomId,
+      turnId: input.turnId,
+      userId: input.userId,
+      occurredAt: input.occurredAt,
+      files: input.files,
+    });
+
+    this.realtimeEventSupportService.publishTurnSubmit(result.submitEvent);
+    await this.realtimeEventSupportService.publishTurnEvaluated(
+      result.evaluatedEvent,
+    );
+
+    if (result.turnChangedEvent) {
+      await this.realtimeEventSupportService.publishTurnChanged(
+        result.turnChangedEvent,
+      );
+    }
+
+    if (result.missionResultEvent) {
+      await this.realtimeEventSupportService.publishMissionResult(
+        result.missionResultEvent,
+      );
+    }
+
+    await this.realtimeEventSupportService.publishGameStateUpdated(
+      result.gameStateUpdatedEvent,
+    );
   }
 }
 

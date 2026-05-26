@@ -36,6 +36,31 @@ describe('RealtimeEventSupportService', () => {
   });
 
   it('publishes canonical realtime event names for turn lifecycle and result hooks', async () => {
+    await service.publishGameStarted({
+      gameRoomId: 'room-1',
+      gameState: {
+        status: 'IN_PROGRESS',
+        turnState: {
+          turnId: 'turn-1',
+          currentPlayerId: 'user-1',
+        },
+      },
+      missionState: {
+        missionId: 'mission-1',
+        projectStructure: {
+          files: [
+            {
+              filePath: 'main.py',
+              content: 'print("hello")\n',
+            },
+          ],
+        },
+      },
+      uiHints: {
+        enterGameScreen: true,
+      },
+      occurredAt: '2026-05-22T09:59:59+09:00',
+    });
     service.publishTurnSubmit({
       gameRoomId: 'room-1',
       turnId: 'turn-1',
@@ -44,9 +69,12 @@ describe('RealtimeEventSupportService', () => {
     });
     await service.publishTurnEvaluated({
       gameRoomId: 'room-1',
-      turnId: 'turn-1',
-      userId: 'user-1',
-      evaluation: {
+      evaluatedTurn: {
+        turnId: 'turn-1',
+        playerUserId: 'user-1',
+        status: 'SUBMITTED',
+      },
+      evaluationResult: {
         executionStatus: 'SUCCESS',
       },
       occurredAt: '2026-05-22T10:00:01+09:00',
@@ -71,14 +99,43 @@ describe('RealtimeEventSupportService', () => {
     });
     await service.publishMissionResult({
       gameRoomId: 'room-1',
-      missionId: 'mission-1',
-      result: {
+      missionResult: {
+        missionId: 'mission-1',
         judgeStatus: 'CLEARED',
       },
       occurredAt: '2026-05-22T10:00:04+09:00',
     });
 
     expect(realtimeGateway.emitToRoom.mock.calls).toEqual([
+      [
+        'room-1',
+        'game-started',
+        {
+          gameRoomId: 'room-1',
+          gameState: {
+            status: 'IN_PROGRESS',
+            turnState: {
+              turnId: 'turn-1',
+              currentPlayerId: 'user-1',
+            },
+          },
+          missionState: {
+            missionId: 'mission-1',
+            projectStructure: {
+              files: [
+                {
+                  filePath: 'main.py',
+                  content: 'print("hello")\n',
+                },
+              ],
+            },
+          },
+          uiHints: {
+            enterGameScreen: true,
+          },
+          occurredAt: '2026-05-22T09:59:59+09:00',
+        },
+      ],
       [
         'room-1',
         'turn-submit',
@@ -94,9 +151,12 @@ describe('RealtimeEventSupportService', () => {
         'turn-evaluated',
         {
           gameRoomId: 'room-1',
-          turnId: 'turn-1',
-          userId: 'user-1',
-          evaluation: {
+          evaluatedTurn: {
+            turnId: 'turn-1',
+            playerUserId: 'user-1',
+            status: 'SUBMITTED',
+          },
+          evaluationResult: {
             executionStatus: 'SUCCESS',
           },
           occurredAt: '2026-05-22T10:00:01+09:00',
@@ -133,14 +193,56 @@ describe('RealtimeEventSupportService', () => {
         'mission-result',
         {
           gameRoomId: 'room-1',
-          missionId: 'mission-1',
-          result: {
+          missionResult: {
             judgeStatus: 'CLEARED',
+            missionId: 'mission-1',
           },
           occurredAt: '2026-05-22T10:00:04+09:00',
         },
       ],
     ]);
+  });
+
+  it('syncs current turn support state from game-started payloads', async () => {
+    await service.publishGameStarted({
+      gameRoomId: 'room-1',
+      gameState: {
+        status: 'IN_PROGRESS',
+        turnState: {
+          turnId: 'turn-1',
+          currentPlayerId: 'user-1',
+        },
+      },
+      missionState: {
+        missionId: 'mission-1',
+        projectStructure: {
+          files: [
+            {
+              filePath: 'main.py',
+              content: 'print("hello")\n',
+            },
+          ],
+        },
+      },
+      uiHints: {
+        enterGameScreen: true,
+      },
+      occurredAt: '2026-05-22T09:59:59+09:00',
+    });
+
+    expect(supportStateStore.saveCurrentTurnState).toHaveBeenCalledWith({
+      gameRoomId: 'room-1',
+      currentTurnId: 'turn-1',
+      currentTurnUserId: 'user-1',
+    });
+    expect(supportStateStore.saveLatestFileContent).toHaveBeenCalledWith({
+      gameRoomId: 'room-1',
+      turnId: 'turn-1',
+      userId: 'user-1',
+      filePath: 'main.py',
+      content: 'print("hello")\n',
+      occurredAt: '2026-05-22T09:59:59+09:00',
+    });
   });
 
   it('attaches canonical AI assistive notices when available', async () => {
@@ -154,9 +256,12 @@ describe('RealtimeEventSupportService', () => {
 
     await service.publishTurnEvaluated({
       gameRoomId: 'room-1',
-      turnId: 'turn-1',
-      userId: 'user-1',
-      evaluation: {
+      evaluatedTurn: {
+        turnId: 'turn-1',
+        playerUserId: 'user-1',
+        status: 'SUBMITTED',
+      },
+      evaluationResult: {
         executionStatus: 'FAILED',
       },
       occurredAt: '2026-05-22T10:00:01+09:00',
@@ -164,9 +269,12 @@ describe('RealtimeEventSupportService', () => {
 
     expect(realtimeGateway.emitToRoom).toHaveBeenCalledWith('room-1', 'turn-evaluated', {
       gameRoomId: 'room-1',
-      turnId: 'turn-1',
-      userId: 'user-1',
-      evaluation: {
+      evaluatedTurn: {
+        turnId: 'turn-1',
+        playerUserId: 'user-1',
+        status: 'SUBMITTED',
+      },
+      evaluationResult: {
         executionStatus: 'FAILED',
       },
       occurredAt: '2026-05-22T10:00:01+09:00',
@@ -187,8 +295,8 @@ describe('RealtimeEventSupportService', () => {
 
     await service.publishMissionResult({
       gameRoomId: 'room-1',
-      missionId: 'mission-1',
-      result: {
+      missionResult: {
+        missionId: 'mission-1',
         judgeStatus: 'FAILED',
       },
       occurredAt: '2026-05-22T10:00:04+09:00',
@@ -196,8 +304,8 @@ describe('RealtimeEventSupportService', () => {
 
     expect(realtimeGateway.emitToRoom).toHaveBeenCalledWith('room-1', 'mission-result', {
       gameRoomId: 'room-1',
-      missionId: 'mission-1',
-      result: {
+      missionResult: {
+        missionId: 'mission-1',
         judgeStatus: 'FAILED',
       },
       occurredAt: '2026-05-22T10:00:04+09:00',
@@ -210,6 +318,16 @@ describe('RealtimeEventSupportService', () => {
       previousTurnId: 'turn-1',
       currentTurnId: 'turn-2',
       currentTurnUserId: 'user-2',
+      missionState: {
+        projectStructure: {
+          files: [
+            {
+              filePath: 'main.py',
+              content: 'print("next")\n',
+            },
+          ],
+        },
+      },
       occurredAt: '2026-05-22T10:00:02+09:00',
     });
 
@@ -221,6 +339,14 @@ describe('RealtimeEventSupportService', () => {
     expect(supportStateStore.clearLatestFileContents).toHaveBeenCalledWith({
       gameRoomId: 'room-1',
       turnId: 'turn-1',
+    });
+    expect(supportStateStore.saveLatestFileContent).toHaveBeenCalledWith({
+      gameRoomId: 'room-1',
+      turnId: 'turn-2',
+      userId: 'user-2',
+      filePath: 'main.py',
+      content: 'print("next")\n',
+      occurredAt: '2026-05-22T10:00:02+09:00',
     });
   });
 

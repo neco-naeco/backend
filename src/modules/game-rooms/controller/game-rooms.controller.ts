@@ -11,6 +11,7 @@ import { IsUUID } from 'class-validator';
 import { CurrentUserId } from '@common/decorators/current-user-id.decorator';
 import { AuthenticatedRequestGuard } from '@common/guards/authenticated-request.guard';
 import { toSeoulIso } from '@common/utils/date.util';
+import { GameStartFlowService } from '../service/game-start-flow.service';
 import { GameRoomsService } from '../service/game-rooms.service';
 
 interface GameRoomListItemResponse {
@@ -41,7 +42,10 @@ interface GameRoomStartResponse {
 @Controller('game-rooms')
 @UseGuards(AuthenticatedRequestGuard)
 export class GameRoomsController {
-  constructor(private readonly gameRoomsService: GameRoomsService) {}
+  constructor(
+    private readonly gameRoomsService: GameRoomsService,
+    private readonly gameStartFlowService: GameStartFlowService,
+  ) {}
 
   @Get()
   async listAccessibleRooms(
@@ -69,7 +73,7 @@ export class GameRoomsController {
     @Param('gameRoomId', new ParseUUIDPipe({ version: '4' })) gameRoomId: string,
     @Body() body: StartGameRequestBody,
   ): Promise<GameRoomStartResponse> {
-    const result = await this.gameRoomsService.startGame({
+    const result = await this.gameStartFlowService.startGame({
       actorUserId: userId,
       gameRoomId,
       missionTemplateId: body.missionTemplateId,
@@ -77,7 +81,7 @@ export class GameRoomsController {
 
     return {
       gameRoomId: result.gameRoom.id,
-      gameRoomMissionId: result.gameRoomMissionId,
+      gameRoomMissionId: result.gameRoomMission.id,
       status: result.gameRoom.status,
       updatedAt: toSeoulIso(result.gameRoom.updatedAt),
     };

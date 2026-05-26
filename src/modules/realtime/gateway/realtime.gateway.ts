@@ -28,6 +28,7 @@ import {
 import {
   CodeChangePayload,
   CodeUpdatedEvent,
+  GameStartedEvent,
   GameStateUpdatedEvent,
   JoinRoomPayload,
   MissionResultEvent,
@@ -183,7 +184,7 @@ export class RealtimeGateway implements OnGatewayDisconnect {
         return;
       }
 
-      const turnSubmitEvent = await this.turnSubmitService.submitTurn({
+      await this.turnSubmitService.submitTurn({
         gameRoomId: session.gameRoomId,
         turnId: currentTurnState.currentTurnId,
         userId: session.userId,
@@ -196,11 +197,6 @@ export class RealtimeGateway implements OnGatewayDisconnect {
         ),
       });
 
-      if (!turnSubmitEvent) {
-        return;
-      }
-
-      this.emitToRoom(session.gameRoomId, REALTIME_EVENT.TURN_SUBMIT, turnSubmitEvent);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'unknown turn-submit error';
       this.logger.warn(`Failed to process turn-submit: ${message}`);
@@ -297,6 +293,7 @@ export class RealtimeGateway implements OnGatewayDisconnect {
     data:
       | RoomParticipantsUpdatedEvent
       | CodeUpdatedEvent
+      | GameStartedEvent
       | TurnSubmitEvent
       | TurnEvaluatedEvent
       | TurnChangedEvent
@@ -313,6 +310,7 @@ export class RealtimeGateway implements OnGatewayDisconnect {
     data:
       | RoomParticipantsUpdatedEvent
       | CodeUpdatedEvent
+      | GameStartedEvent
       | TurnSubmitEvent
       | TurnEvaluatedEvent
       | TurnChangedEvent
@@ -336,6 +334,7 @@ export class RealtimeGateway implements OnGatewayDisconnect {
     event: string,
     data:
       | CodeUpdatedEvent
+      | GameStartedEvent
       | TurnSubmitEvent
       | TurnEvaluatedEvent
       | TurnChangedEvent

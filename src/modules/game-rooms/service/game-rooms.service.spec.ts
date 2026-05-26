@@ -3,6 +3,7 @@
 import { DataSource, In, Repository } from 'typeorm';
 import { GameRoomMissionsService } from '@modules/game-room-missions/service/game-room-missions.service';
 import { GameRoomParticipantEntity } from '@modules/game-room-participants/entity/game-room-participant.entity';
+import { TurnsService } from '@modules/turns/service/turns.service';
 import { GameRoomsService } from './game-rooms.service';
 import { GameRoomEntity } from '../entity/game-room.entity';
 import {
@@ -23,8 +24,12 @@ describe('GameRoomsService', () => {
     >
   >;
   let gameRoomMissionsService: jest.Mocked<
-    Pick<GameRoomMissionsService, 'createMissionForGameStart'>
+    Pick<
+      GameRoomMissionsService,
+      'createMissionForGameStart' | 'transitionCurrentStepToInProgress'
+    >
   >;
+  let turnsService: jest.Mocked<Pick<TurnsService, 'createInitialTurn'>>;
   let manager: { getRepository: jest.Mock; query: jest.Mock };
   let dataSource: { transaction: jest.Mock; getRepository: jest.Mock };
 
@@ -45,6 +50,11 @@ describe('GameRoomsService', () => {
 
     gameRoomMissionsService = {
       createMissionForGameStart: jest.fn(),
+      transitionCurrentStepToInProgress: jest.fn(),
+    };
+
+    turnsService = {
+      createInitialTurn: jest.fn(),
     };
 
     manager = {
@@ -66,6 +76,7 @@ describe('GameRoomsService', () => {
     service = new GameRoomsService(
       dataSource as unknown as DataSource,
       gameRoomMissionsService as unknown as GameRoomMissionsService,
+      turnsService as unknown as TurnsService,
     );
   });
 
@@ -224,6 +235,7 @@ describe('GameRoomsService', () => {
       ownerUserId: 'owner-1',
       status: GameRoomStatus.WAITING,
       difficulty: 'EASY',
+      timeLimitSeconds: 30,
       minParticipants: 2,
       maxParticipants: 4,
     } as GameRoomEntity);
@@ -285,6 +297,7 @@ describe('GameRoomsService', () => {
       ownerUserId: 'owner-1',
       status: GameRoomStatus.WAITING,
       difficulty: 'EASY',
+      timeLimitSeconds: 30,
       minParticipants: 2,
       maxParticipants: 4,
     } as GameRoomEntity);
@@ -298,6 +311,17 @@ describe('GameRoomsService', () => {
     participantRepository.count.mockResolvedValue(2);
     gameRoomMissionsService.createMissionForGameStart.mockResolvedValue({
       id: 'mission-1',
+      currentStepId: 'step-1',
+    } as never);
+    turnsService.createInitialTurn.mockResolvedValue({
+      id: 'turn-1',
+      playerUserId: 'owner-1',
+      turnNumber: 1,
+      status: 'IN_PROGRESS',
+    } as never);
+    gameRoomMissionsService.transitionCurrentStepToInProgress.mockResolvedValue({
+      id: 'step-1',
+      status: 'IN_PROGRESS',
     } as never);
     roomRepository.save.mockImplementation(async (room) => room as never);
 
@@ -331,6 +355,18 @@ describe('GameRoomsService', () => {
       missionTemplateId: 'template-1',
       runtimeContainerId: 'container-1',
     });
+    expect(turnsService.createInitialTurn).toHaveBeenCalledWith({
+      manager,
+      gameRoomId: 'room-1',
+      missionId: 'mission-1',
+      timeLimitSeconds: 30,
+    });
+    expect(
+      gameRoomMissionsService.transitionCurrentStepToInProgress,
+    ).toHaveBeenCalledWith({
+      manager,
+      gameRoomMissionId: 'mission-1',
+    });
     expect(roomRepository.save).toHaveBeenCalledWith(
       expect.objectContaining({
         id: 'room-1',
@@ -342,7 +378,15 @@ describe('GameRoomsService', () => {
         id: 'room-1',
         status: GameRoomStatus.IN_PROGRESS,
       }),
-      gameRoomMissionId: 'mission-1',
+      gameRoomMission: expect.objectContaining({
+        id: 'mission-1',
+      }),
+      currentTurn: expect.objectContaining({
+        id: 'turn-1',
+      }),
+      currentStep: expect.objectContaining({
+        id: 'step-1',
+      }),
     });
   });
 });

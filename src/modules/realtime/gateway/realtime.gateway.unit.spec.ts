@@ -122,12 +122,7 @@ describe('RealtimeGateway support hooks', () => {
       authorizeCodeChange: jest.fn(),
     };
     const turnSubmitService: jest.Mocked<RealtimeTurnSubmitService> = {
-      submitTurn: jest.fn().mockResolvedValue({
-        gameRoomId: 'room-1',
-        turnId: 'turn-1',
-        userId: 'user-1',
-        occurredAt: '2026-05-22T00:01:00+09:00',
-      }),
+      submitTurn: jest.fn().mockResolvedValue(undefined),
     };
     const supportStateStore: jest.Mocked<RealtimeSupportStateStore> = {
       saveCurrentTurnState: jest.fn().mockResolvedValue(undefined),

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { RedisIntegrationModule } from '../../integrations/redis/redis.module';
 import { WebsocketIntegrationModule } from '../../integrations/websocket/websocket.module';
+import { TurnsModule } from '../turns/turns.module';
 import { RealtimeGateway } from './gateway/realtime.gateway';
 import {
   DefaultRealtimeAuthService,
@@ -10,6 +11,7 @@ import {
   DefaultRealtimeTurnSubmitService,
   DefaultRealtimeTurnEditService,
 } from './service/realtime-defaults.service';
+import { RealtimeTurnTimeoutService } from './service/realtime-turn-timeout.service';
 import {
   REALTIME_ASSISTIVE_MESSAGE_SERVICE,
   REALTIME_AUTH_SERVICE,
@@ -27,7 +29,7 @@ import { RealtimeEventSupportService } from './service/realtime-event-support.se
  * To be implemented by Worker 3.
  */
 @Module({
-  imports: [WebsocketIntegrationModule, RedisIntegrationModule],
+  imports: [WebsocketIntegrationModule, RedisIntegrationModule, TurnsModule],
   providers: [
     RealtimeGateway,
     DefaultRealtimeAuthService,
@@ -37,6 +39,7 @@ import { RealtimeEventSupportService } from './service/realtime-event-support.se
     DefaultRealtimeTurnSubmitService,
     DefaultRealtimeAssistiveMessageService,
     RealtimeEventSupportService,
+    RealtimeTurnTimeoutService,
     {
       provide: REALTIME_AUTH_SERVICE,
       useExisting: DefaultRealtimeAuthService,

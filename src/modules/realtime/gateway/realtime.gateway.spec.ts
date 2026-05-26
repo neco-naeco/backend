@@ -1,10 +1,12 @@
 /// <reference types="jest" />
 import { ForbiddenException, INestApplication, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import { RedisIntegrationModule } from '../../../integrations/redis/redis.module';
 import WebSocket from 'ws';
 import { NecoWsAdapter } from '../../../integrations/websocket/neco-ws.adapter';
+import { WebsocketIntegrationModule } from '../../../integrations/websocket/websocket.module';
 import { GameRoomParticipantMembershipStatus, GameRoomParticipantRole } from '../../../shared/enums';
-import { RealtimeModule } from '../realtime.module';
+import { RealtimeGateway } from './realtime.gateway';
 import {
   REALTIME_AUTH_SERVICE,
   REALTIME_ASSISTIVE_MESSAGE_SERVICE,
@@ -57,21 +59,35 @@ describe('RealtimeGateway', () => {
     };
 
     const moduleRef = await Test.createTestingModule({
-      imports: [RealtimeModule],
-    })
-      .overrideProvider(REALTIME_AUTH_SERVICE)
-      .useValue(authService)
-      .overrideProvider(REALTIME_ROOM_ACCESS_SERVICE)
-      .useValue(roomAccessService)
-      .overrideProvider(REALTIME_DISCONNECT_SERVICE)
-      .useValue(disconnectService)
-      .overrideProvider(REALTIME_TURN_EDIT_SERVICE)
-      .useValue(turnEditService)
-      .overrideProvider(REALTIME_TURN_SUBMIT_SERVICE)
-      .useValue(turnSubmitService)
-      .overrideProvider(REALTIME_ASSISTIVE_MESSAGE_SERVICE)
-      .useValue(assistiveMessageService)
-      .compile();
+      imports: [WebsocketIntegrationModule, RedisIntegrationModule],
+      providers: [
+        RealtimeGateway,
+        {
+          provide: REALTIME_AUTH_SERVICE,
+          useValue: authService,
+        },
+        {
+          provide: REALTIME_ROOM_ACCESS_SERVICE,
+          useValue: roomAccessService,
+        },
+        {
+          provide: REALTIME_DISCONNECT_SERVICE,
+          useValue: disconnectService,
+        },
+        {
+          provide: REALTIME_TURN_EDIT_SERVICE,
+          useValue: turnEditService,
+        },
+        {
+          provide: REALTIME_TURN_SUBMIT_SERVICE,
+          useValue: turnSubmitService,
+        },
+        {
+          provide: REALTIME_ASSISTIVE_MESSAGE_SERVICE,
+          useValue: assistiveMessageService,
+        },
+      ],
+    }).compile();
 
     app = moduleRef.createNestApplication();
     app.useWebSocketAdapter(new NecoWsAdapter(app));
@@ -83,7 +99,9 @@ describe('RealtimeGateway', () => {
   });
 
   afterEach(async () => {
-    await app.close();
+    if (app) {
+      await app.close();
+    }
   });
 
   it('closes with 4401 when the token is invalid', async () => {
@@ -401,12 +419,7 @@ describe('RealtimeGateway', () => {
       currentTurnId: 'turn-001',
       currentTurnUserId: 'user-001',
     });
-    turnSubmitService.submitTurn.mockResolvedValue({
-      gameRoomId: 'room-001',
-      turnId: 'turn-001',
-      userId: 'user-001',
-      occurredAt: '2026-05-22T11:00:00+09:00',
-    });
+    turnSubmitService.submitTurn.mockResolvedValue(undefined);
 
     const ownerSocket = await connectClient(port);
     const watcherSocket = await connectClient(port);
@@ -437,21 +450,12 @@ describe('RealtimeGateway', () => {
     });
     await waitForMessage(watcherSocket);
 
-    const submitEvent = waitForMessage(watcherSocket);
     sendTurnSubmit(ownerSocket, {
       gameRoomId: 'room-001',
       occurredAt: '2026-05-22T11:00:00+09:00',
     });
 
-    await expect(submitEvent).resolves.toEqual({
-      event: 'turn-submit',
-      data: {
-        gameRoomId: 'room-001',
-        turnId: 'turn-001',
-        userId: 'user-001',
-        occurredAt: '2026-05-22T11:00:00+09:00',
-      },
-    });
+    await flushMicrotasks();
     expect(turnSubmitService.submitTurn).toHaveBeenCalledWith({
       gameRoomId: 'room-001',
       turnId: 'turn-001',

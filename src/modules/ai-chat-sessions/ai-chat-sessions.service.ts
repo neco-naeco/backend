@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { GameRoomParticipantEntity } from '@modules/game-room-participants/entity/game-room-participant.entity';
 import { GameRoomParticipantsService } from '@modules/game-room-participants/service/game-room-participants.service';
 import { GameRoomMissionsService } from '@modules/game-room-missions/service/game-room-missions.service';
+import { GameStartFlowService } from '@modules/game-rooms/service/game-start-flow.service';
 import { GameRoomsService } from '@modules/game-rooms/service/game-rooms.service';
 import { DataSource, FindOptionsWhere, In, Repository } from 'typeorm';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user.type';
@@ -124,6 +125,7 @@ export class AiChatSessionsService {
     private readonly participantRepository: Repository<GameRoomParticipantEntity>,
     private readonly dataSource: DataSource,
     private readonly gameRoomsService: GameRoomsService,
+    private readonly gameStartFlowService: GameStartFlowService,
     private readonly gameRoomMissionsService: GameRoomMissionsService,
     private readonly gameRoomParticipantsService: GameRoomParticipantsService,
     @Inject(LLM_INTENT_PARSER)
@@ -714,7 +716,7 @@ export class AiChatSessionsService {
     };
 
     try {
-      const result = await this.gameRoomsService.startGame({
+      const result = await this.gameStartFlowService.startGame({
         actorUserId: user.userId,
         gameRoomId: resolvedGameRoomId,
         missionTemplateId,

@@ -11,7 +11,7 @@ export interface StartExecutionInput {
   missionId: string;
   turnId: string;
   userId: string;
-  containerId: string;
+  containerId: string | null;
   command: string;
   filePath: string;
   content: string;
@@ -52,6 +52,19 @@ export class ExecutionsService {
     execution.status = ExecutionStatus.RUNNING;
     execution.startedAt = new Date();
     await this.executionsRepository.save(execution);
+
+    if (input.containerId === null) {
+      execution.stdout = '';
+      execution.stderr = '';
+      execution.exitCode = null;
+      execution.finishedAt = new Date();
+      execution.status = ExecutionStatus.FAILED;
+      execution.runtimeFailureCode = 'RUNTIME_CONTAINER_UNAVAILABLE';
+      execution.runtimeFailureMessage =
+        'Mission runtime container is not available.';
+
+      return this.executionsRepository.save(execution);
+    }
 
     let runtimeResult;
 

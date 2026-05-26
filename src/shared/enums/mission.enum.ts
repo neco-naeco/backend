@@ -5,3 +5,9 @@ export enum GameRoomMissionStepStatus {
   CLEARED = 'CLEARED',
   FAILED = 'FAILED',
 }
+
+export enum MissionResultJudgeStatus {
+  PASSED = 'PASSED',
+  FAILED = 'FAILED',
+  ERROR = 'ERROR',
+}

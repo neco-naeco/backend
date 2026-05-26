@@ -96,11 +96,18 @@ export interface TurnSubmitEvent {
   occurredAt: string;
 }
 
+export interface GameStartedEvent {
+  gameRoomId: string;
+  gameState: Record<string, unknown>;
+  missionState: Record<string, unknown>;
+  uiHints: Record<string, unknown>;
+  occurredAt: string;
+}
+
 export interface TurnEvaluatedEvent {
   gameRoomId: string;
-  turnId: string;
-  userId: string;
-  evaluation: Record<string, unknown>;
+  evaluatedTurn: Record<string, unknown>;
+  evaluationResult: Record<string, unknown>;
   occurredAt: string;
   aiNotice?: RealtimeAssistiveNotice | null;
 }
@@ -110,20 +117,25 @@ export interface TurnChangedEvent {
   previousTurnId: string | null;
   currentTurnId: string | null;
   currentTurnUserId: string | null;
+  missionState?: Record<string, unknown> | null;
+  turnState?: Record<string, unknown> | null;
+  nextPlayerId?: string | null;
+  turnSnapshotId?: string | null;
   occurredAt: string;
 }
 
 export interface GameStateUpdatedEvent {
   gameRoomId: string;
   gameState: Record<string, unknown>;
+  missionState?: Record<string, unknown> | null;
   occurredAt: string;
   aiNotice?: RealtimeAssistiveNotice | null;
 }
 
 export interface MissionResultEvent {
   gameRoomId: string;
-  missionId: string;
-  result: Record<string, unknown>;
+  gameState?: Record<string, unknown>;
+  missionResult: Record<string, unknown>;
   occurredAt: string;
   aiNotice?: RealtimeAssistiveNotice | null;
 }
@@ -168,7 +180,7 @@ export interface RealtimeTurnEditService {
 }
 
 export interface RealtimeTurnSubmitService {
-  submitTurn(input: RealtimeTurnSubmitRequest): Promise<TurnSubmitEvent | null>;
+  submitTurn(input: RealtimeTurnSubmitRequest): Promise<void>;
 }
 
 export interface RealtimeAssistiveMessageService {

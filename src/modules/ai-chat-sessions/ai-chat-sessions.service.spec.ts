@@ -1,6 +1,7 @@
 import { HttpException, HttpStatus } from '@nestjs/common';
 import { GameRoomMissionsService } from '@modules/game-room-missions/service/game-room-missions.service';
 import { GameRoomParticipantsService } from '@modules/game-room-participants/service/game-room-participants.service';
+import { GameStartFlowService } from '@modules/game-rooms/service/game-start-flow.service';
 import { GameRoomsService } from '@modules/game-rooms/service/game-rooms.service';
 import { DataSource, Repository } from 'typeorm';
 import {
@@ -32,6 +33,7 @@ describe('AiChatSessionsService', () => {
   let participantRepository: jest.Mocked<Repository<GameRoomParticipantEntity>>;
   let dataSource: jest.Mocked<DataSource>;
   let gameRoomsService: jest.Mocked<GameRoomsService>;
+  let gameStartFlowService: jest.Mocked<GameStartFlowService>;
   let gameRoomMissionsService: jest.Mocked<GameRoomMissionsService>;
   let gameRoomParticipantsService: jest.Mocked<GameRoomParticipantsService>;
   let llmIntentParser: jest.Mocked<LlmIntentParserPort>;
@@ -73,6 +75,10 @@ describe('AiChatSessionsService', () => {
       listAccessibleRooms: jest.fn(),
     } as unknown as jest.Mocked<GameRoomsService>;
 
+    gameStartFlowService = {
+      startGame: jest.fn(),
+    } as unknown as jest.Mocked<GameStartFlowService>;
+
     gameRoomMissionsService = {
       validateMissionTemplateSelection: jest.fn(),
     } as unknown as jest.Mocked<GameRoomMissionsService>;
@@ -107,6 +113,7 @@ describe('AiChatSessionsService', () => {
       participantRepository,
       dataSource,
       gameRoomsService,
+      gameStartFlowService,
       gameRoomMissionsService,
       gameRoomParticipantsService,
       llmIntentParser,
@@ -472,9 +479,11 @@ describe('AiChatSessionsService', () => {
           requestedAt: new Date(),
         } as unknown as AiChatRequest,
       ]);
-      gameRoomsService.startGame.mockResolvedValue({
+      gameStartFlowService.startGame.mockResolvedValue({
         gameRoom: { id: 'room-1' },
-        gameRoomMissionId: 'mission-1',
+        gameRoomMission: { id: 'mission-1' },
+        currentTurn: { id: 'turn-1' },
+        currentStep: { id: 'step-1' },
       } as never);
       participantRepository.find.mockResolvedValue([
         {
@@ -491,7 +500,7 @@ describe('AiChatSessionsService', () => {
         message: '게임 시작할게',
       });
 
-      expect(gameRoomsService.startGame).toHaveBeenCalledWith({
+      expect(gameStartFlowService.startGame).toHaveBeenCalledWith({
         actorUserId: user.userId,
         gameRoomId: 'room-1',
         missionTemplateId: 'template-1',
@@ -537,7 +546,7 @@ describe('AiChatSessionsService', () => {
           requestedAt: new Date(),
         } as unknown as AiChatRequest,
       ]);
-      gameRoomsService.startGame.mockRejectedValue(
+      gameStartFlowService.startGame.mockRejectedValue(
         new HttpException(
           {
             code: 'ROOM_START_CONDITION_NOT_MET',

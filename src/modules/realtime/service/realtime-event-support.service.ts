@@ -7,6 +7,7 @@ import {
   REALTIME_SUPPORT_STATE_STORE,
 } from './realtime.constants';
 import type {
+  GameStartedEvent,
   GameStateUpdatedEvent,
   MissionResultEvent,
   RealtimeAssistiveMessageService,
@@ -33,12 +34,36 @@ export class RealtimeEventSupportService {
     this.realtimeGateway.emitToRoom(event.gameRoomId, REALTIME_EVENT.TURN_SUBMIT, event);
   }
 
+  async publishGameStarted(event: GameStartedEvent): Promise<void> {
+    const currentTurnId = getCurrentTurnId(event.gameState);
+    const currentTurnUserId = getCurrentTurnUserId(event.gameState);
+
+    await this.saveCurrentTurnStateBestEffort({
+      gameRoomId: event.gameRoomId,
+      currentTurnId,
+      currentTurnUserId,
+    });
+    await this.seedInitialFileBuffersBestEffort({
+      gameRoomId: event.gameRoomId,
+      turnId: currentTurnId,
+      userId: currentTurnUserId,
+      missionState: event.missionState,
+      occurredAt: event.occurredAt,
+    });
+
+    this.realtimeGateway.emitToRoom(
+      event.gameRoomId,
+      REALTIME_EVENT.GAME_STARTED,
+      event,
+    );
+  }
+
   async publishTurnEvaluated(event: TurnEvaluatedEvent): Promise<void> {
     const enrichedEvent = await this.attachNotice(REALTIME_EVENT.TURN_EVALUATED, event, {
       gameRoomId: event.gameRoomId,
-      turnId: event.turnId,
-      userId: event.userId,
-      payload: event.evaluation,
+      turnId: asString(event.evaluatedTurn.turnId),
+      userId: asString(event.evaluatedTurn.playerUserId),
+      payload: event.evaluationResult,
     });
 
     this.realtimeGateway.emitToRoom(
@@ -53,6 +78,13 @@ export class RealtimeEventSupportService {
       gameRoomId: event.gameRoomId,
       currentTurnId: event.currentTurnId,
       currentTurnUserId: event.currentTurnUserId,
+    });
+    await this.seedInitialFileBuffersBestEffort({
+      gameRoomId: event.gameRoomId,
+      turnId: event.currentTurnId,
+      userId: event.currentTurnUserId,
+      missionState: isRecord(event.missionState) ? event.missionState : {},
+      occurredAt: event.occurredAt,
     });
 
     if (event.previousTurnId) {
@@ -89,8 +121,8 @@ export class RealtimeEventSupportService {
   async publishMissionResult(event: MissionResultEvent): Promise<void> {
     const enrichedEvent = await this.attachNotice(REALTIME_EVENT.MISSION_RESULT, event, {
       gameRoomId: event.gameRoomId,
-      missionId: event.missionId,
-      payload: event.result,
+      missionId: asString(event.missionResult.missionId),
+      payload: event.missionResult,
     });
 
     this.realtimeGateway.emitToRoom(
@@ -180,6 +212,47 @@ export class RealtimeEventSupportService {
       this.logger.warn(`Failed to clear previous turn support buffer: ${message}`);
     }
   }
+
+  private async seedInitialFileBuffersBestEffort(input: {
+    gameRoomId: string;
+    turnId: string | null;
+    userId: string | null;
+    missionState: Record<string, unknown>;
+    occurredAt: string;
+  }): Promise<void> {
+    if (!input.turnId || !input.userId) {
+      return;
+    }
+
+    const projectStructure = isRecord(input.missionState.projectStructure)
+      ? input.missionState.projectStructure
+      : null;
+    const files = Array.isArray(projectStructure?.files)
+      ? projectStructure.files
+      : [];
+
+    try {
+      await Promise.all(
+        files
+          .filter((file): file is Record<string, unknown> => isRecord(file))
+          .filter((file) => typeof file.filePath === 'string')
+          .map((file) =>
+            this.supportStateStore.saveLatestFileContent({
+              gameRoomId: input.gameRoomId,
+              turnId: input.turnId!,
+              userId: input.userId!,
+              filePath: file.filePath as string,
+              content: asString(file.content) ?? '',
+              occurredAt: input.occurredAt,
+            }),
+          ),
+      );
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'unknown game-start buffer seed error';
+      this.logger.warn(`Failed to seed initial mission file buffers: ${message}`);
+    }
+  }
 }
 
 function getCurrentTurnId(gameState: Record<string, unknown>): string | null {
@@ -208,4 +281,8 @@ function isCanonicalNoticeType(type: AiRealtimeEventType): boolean {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
+}
+
+function asString(value: unknown): string | null {
+  return typeof value === 'string' && value.length > 0 ? value : null;
 }

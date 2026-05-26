@@ -7,6 +7,10 @@ import {
 import { DataSource, EntityManager, In, Repository } from 'typeorm';
 import { GameRoomMissionsService } from '@modules/game-room-missions/service/game-room-missions.service';
 import { GameRoomParticipantEntity } from '@modules/game-room-participants/entity/game-room-participant.entity';
+import { TurnsService } from '@modules/turns/service/turns.service';
+import { TurnEntity } from '@modules/turns/entity/turn.entity';
+import { GameRoomMissionEntity } from '@modules/game-room-missions/entity/game-room-mission.entity';
+import { GameRoomMissionStepEntity } from '@modules/game-room-missions/entity/game-room-mission-step.entity';
 import { GameRoomEntity } from '../entity/game-room.entity';
 import {
   GameRoomParticipantMembershipStatus,
@@ -32,7 +36,9 @@ export interface StartGameInput {
 
 export interface StartGameResult {
   gameRoom: GameRoomEntity;
-  gameRoomMissionId: string;
+  gameRoomMission: GameRoomMissionEntity;
+  currentTurn: TurnEntity;
+  currentStep: GameRoomMissionStepEntity;
 }
 
 @Injectable()
@@ -40,6 +46,7 @@ export class GameRoomsService {
   constructor(
     private readonly dataSource: DataSource,
     private readonly gameRoomMissionsService: GameRoomMissionsService,
+    private readonly turnsService: TurnsService,
   ) {}
 
   async listAccessibleRooms(userId: string): Promise<GameRoomEntity[]> {
@@ -144,13 +151,26 @@ export class GameRoomsService {
           missionTemplateId: input.missionTemplateId,
           runtimeContainerId: input.runtimeContainerId,
         });
+      const currentTurn = await this.turnsService.createInitialTurn({
+        manager,
+        gameRoomId: gameRoom.id,
+        missionId: gameRoomMission.id,
+        timeLimitSeconds: gameRoom.timeLimitSeconds,
+      });
+      const currentStep =
+        await this.gameRoomMissionsService.transitionCurrentStepToInProgress({
+          manager,
+          gameRoomMissionId: gameRoomMission.id,
+        });
 
       gameRoom.status = GameRoomStatus.IN_PROGRESS;
       const savedGameRoom = await roomRepository.save(gameRoom);
 
       return {
         gameRoom: savedGameRoom,
-        gameRoomMissionId: gameRoomMission.id,
+        gameRoomMission,
+        currentTurn,
+        currentStep,
       };
     });
   }
