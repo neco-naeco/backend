@@ -57,6 +57,7 @@ Persistent tables currently defined in the ERD:
 - Database columns use `snake_case`.
 - Frequently changing structured payloads use `jsonb`.
 - Code source, project structure, and judgment payloads may use `jsonb` or `text`.
+- PostgreSQL must provide `pgcrypto` so migrations can use `gen_random_uuid()` for UUID defaults.
 
 ## Recommended Indexes
 

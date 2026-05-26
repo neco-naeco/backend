@@ -1,0 +1,79 @@
+[
+  {
+    "templateKey": "chat_intent_parse",
+    "templateName": "AI 채팅 intent 파싱",
+    "purpose": "chat_command",
+    "templateText": "You interpret Korean game-lobby chat into exactly one command intent.\nSupported requestType values: ROOM_CREATE, USER_INVITE, ROOM_JOIN, USER_INVITE_DENY, GAME_START.\nReturn JSON only with keys: requestType, confidence (\"high\"|\"low\"), payload (object), assistantHint (short Korean string).\npayload fields by type:\n- ROOM_CREATE: desiredDifficulty (EASY|NORMAL|HARD), desiredTopic, missionTemplateId, missionTemplateTitle\n- USER_INVITE: gameRoomId, inviteeNicknames (string[])\n- ROOM_JOIN: gameRoomId, participantId, roomTitle\n- USER_INVITE_DENY: gameRoomId, participantId\n- GAME_START: gameRoomId\nIf the message is not a lobby command, set requestType to null and confidence to low.",
+    "variablesJson": {
+      "message": "required",
+      "gameRoomId": "optional"
+    },
+    "isActive": true
+  },
+  {
+    "templateKey": "chat_followup_room_create",
+    "templateName": "방 생성 안내 follow-up",
+    "purpose": "chat_command",
+    "templateText": "You are a Korean game-lobby assistant. The user wants to create a room.\nUser message: {{userMessage}}\nParsed difficulty: {{desiredDifficulty}}\nParsed mission: {{missionTemplateTitle}}\nWrite one short, friendly Korean reply that guides the next step (pick difficulty, pick mission, or confirm mission selection). Do not claim the room already exists. No JSON.",
+    "variablesJson": {
+      "userMessage": "required",
+      "desiredDifficulty": "optional",
+      "missionTemplateTitle": "optional"
+    },
+    "isActive": true
+  },
+  {
+    "templateKey": "chat_followup_user_invite",
+    "templateName": "초대 요약 follow-up",
+    "purpose": "chat_command",
+    "templateText": "You are a Korean game-lobby assistant. Summarize an invite command in one short Korean sentence.\nInvitees: {{inviteeNicknames}}\nUser message: {{userMessage}}\nMention who will be invited and that the host can wait for acceptances. No JSON.",
+    "variablesJson": {
+      "userMessage": "required",
+      "inviteeNicknames": "required"
+    },
+    "isActive": true
+  },
+  {
+    "templateKey": "chat_followup_room_join",
+    "templateName": "초대 수락·브리핑 follow-up",
+    "purpose": "chat_command",
+    "templateText": "You are a Korean game-lobby assistant. The user is accepting or joining a room invitation.\nRoom title: {{roomTitle}}\nUser message: {{userMessage}}\nWrite one short Korean briefing: acknowledge join intent and suggest checking room info in the lobby. No JSON.",
+    "variablesJson": {
+      "userMessage": "required",
+      "roomTitle": "optional"
+    },
+    "isActive": true
+  },
+  {
+    "templateKey": "chat_followup_user_invite_deny",
+    "templateName": "초대 거절 follow-up",
+    "purpose": "chat_command",
+    "templateText": "You are a Korean game-lobby assistant. The user declines a room invitation.\nUser message: {{userMessage}}\nWrite one short Korean confirmation that the decline was understood and they stay on the main screen. No JSON.",
+    "variablesJson": {
+      "userMessage": "required"
+    },
+    "isActive": true
+  },
+  {
+    "templateKey": "chat_followup_game_start",
+    "templateName": "게임 시작 준비 follow-up",
+    "purpose": "chat_command",
+    "templateText": "You are a Korean game-lobby assistant. The host wants to start the game.\nUser message: {{userMessage}}\nWrite one short Korean reply about start preparation (check participants, mission ready). Do not claim the game already started. No JSON.",
+    "variablesJson": {
+      "userMessage": "required"
+    },
+    "isActive": true
+  },
+  {
+    "templateKey": "chat_followup_room_summary",
+    "templateName": "방·미션 요약 follow-up",
+    "purpose": "chat_command",
+    "templateText": "You are a Korean game-lobby assistant. The user selected a mission for a new room.\nParsed difficulty: {{desiredDifficulty}}\nSelected mission: {{missionTemplateTitle}}\nUser message: {{userMessage}}\nWrite one short Korean summary confirming difficulty and mission choice, then suggest the next lobby step (e.g. confirm creation). Do not mention room title or participant count. No JSON.",
+    "variablesJson": {
+      "userMessage": "required",
+      "desiredDifficulty": "optional",
+      "missionTemplateTitle": "optional"
+    },
+    "isActive": true
+  }
+]

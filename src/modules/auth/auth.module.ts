@@ -1,9 +1,19 @@
 import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { JwtIntegrationModule } from '../../integrations/jwt/jwt.module';
+import { AiChatSession } from '../ai-chat-sessions/entity/ai-chat-session.entity';
+import { AuthController } from './controller/auth.controller';
+import { AuthService } from './auth.service';
+import { RefreshToken } from './entity/refresh-token.entity';
+import { User } from './entity/user.entity';
 
-/**
- * Responsibilities: signup, login, access-token issuance, refresh-token rotation.
- * Primary entities: users, refresh_tokens.
- * To be implemented by Worker 1.
- */
-@Module({})
+@Module({
+  imports: [
+    TypeOrmModule.forFeature([User, RefreshToken, AiChatSession]),
+    JwtIntegrationModule,
+  ],
+  controllers: [AuthController],
+  providers: [AuthService],
+  exports: [AuthService, TypeOrmModule],
+})
 export class AuthModule {}

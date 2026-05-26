@@ -21,6 +21,7 @@ Auth request field rules:
 
 - `POST /v1/auth/signup` accepts `passwordHash` as a SHA-256 hex string.
 - `POST /v1/auth/login` accepts `passwordHash` as a SHA-256 hex string.
+- `POST /v1/auth/refresh-token` returns both a new `accessToken` and a new `refreshToken`.
 - On successful signup, the server automatically creates exactly one AI chat session for that user.
 
 Authorization header:
@@ -111,6 +112,13 @@ Main entry contract notes:
 
 - `GET /v1/ai-chat-sessions/{aiChatSessionId}/messages`
 - `POST /v1/ai-chat-sessions/{aiChatSessionId}/messages`
+
+`POST /v1/ai-chat-sessions/{aiChatSessionId}/messages` response rules:
+
+- `requestType` uses the canonical five command values only when intent parsing has finished.
+- When `requestStatus` is `RECEIVED`, `requestType` must be omitted from the success payload.
+- When `requestStatus` is `COMPLETED` or `FAILED`, `requestType` is required.
+- Until intent parsing is implemented, the server may persist an internal unparsed marker in storage, but that value must not appear in API responses.
 
 ### Game Start
 

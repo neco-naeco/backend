@@ -1,3 +1,9 @@
+export enum AiChatSessionStatus {
+  ACTIVE = 'ACTIVE',
+  CLOSED = 'CLOSED',
+  ERROR = 'ERROR',
+}
+
 export enum AiChatRequestType {
   ROOM_CREATE = 'ROOM_CREATE',
   USER_INVITE = 'USER_INVITE',

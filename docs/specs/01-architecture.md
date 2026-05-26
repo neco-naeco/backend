@@ -42,6 +42,8 @@ Asynchronous or async-like workloads:
 
 Stores users, rooms, participants, missions, turns, execution results, and AI session history.
 
+MVP auth and AI-chat migrations assume the `pgcrypto` extension is available so `gen_random_uuid()` can be used for UUID primary keys.
+
 ### Redis
 
 Used as a support layer for:
