@@ -1,9 +1,9 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class CreateTurnsAndMissionResultsTables1764205300000
+export class CreateTurnsAndMissionResultsTables1779770000000
   implements MigrationInterface
 {
-  name = 'CreateTurnsAndMissionResultsTables1764205300000';
+  name = 'CreateTurnsAndMissionResultsTables1779770000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
