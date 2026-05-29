@@ -31,7 +31,6 @@ export interface StartGameInput {
   actorUserId: string;
   gameRoomId: string;
   missionTemplateId: string;
-  runtimeContainerId?: string;
 }
 
 export interface StartGameResult {
@@ -149,72 +148,89 @@ export class GameRoomsService {
   }
 
   async startGame(input: StartGameInput): Promise<StartGameResult> {
-    return this.dataSource.transaction(async (manager) => {
-      await this.acquireRoomLifecycleLock(manager, input.gameRoomId);
-      await this.acquireWaitingRoomLock(manager, input.actorUserId);
+    let preparedRuntimeContainerId: string | null = null;
 
-      const roomRepository = manager.getRepository(GameRoomEntity);
-      const participantRepository = manager.getRepository(GameRoomParticipantEntity);
-      const gameRoom = await this.getRoomOrThrow(roomRepository, input.gameRoomId);
+    try {
+      const result = await this.dataSource.transaction(async (manager) => {
+        await this.acquireRoomLifecycleLock(manager, input.gameRoomId);
+        await this.acquireWaitingRoomLock(manager, input.actorUserId);
 
-      this.ensureWaitingRoom(gameRoom);
-      await this.ensureActiveOwnerMembership(
-        participantRepository,
-        gameRoom,
-        input.actorUserId,
-      );
+        const roomRepository = manager.getRepository(GameRoomEntity);
+        const participantRepository = manager.getRepository(GameRoomParticipantEntity);
+        const gameRoom = await this.getRoomOrThrow(roomRepository, input.gameRoomId);
 
-      const joinedParticipantCount = await participantRepository.count({
-        where: {
-          gameRoomId: gameRoom.id,
-          membershipStatus: GameRoomParticipantMembershipStatus.JOINED,
-        },
-      });
+        this.ensureWaitingRoom(gameRoom);
+        await this.ensureActiveOwnerMembership(
+          participantRepository,
+          gameRoom,
+          input.actorUserId,
+        );
 
-      if (joinedParticipantCount < gameRoom.minParticipants) {
-        throw new ConflictException({
-          code: 'MINIMUM_PARTICIPANTS_NOT_MET',
-          message: 'Room does not have enough joined participants to start.',
+        const joinedParticipantCount = await participantRepository.count({
+          where: {
+            gameRoomId: gameRoom.id,
+            membershipStatus: GameRoomParticipantMembershipStatus.JOINED,
+          },
         });
-      }
 
-      if (joinedParticipantCount > gameRoom.maxParticipants) {
-        throw new ConflictException({
-          code: 'MAXIMUM_PARTICIPANTS_EXCEEDED',
-          message: 'Room exceeds the maximum participant limit.',
-        });
-      }
+        if (joinedParticipantCount < gameRoom.minParticipants) {
+          throw new ConflictException({
+            code: 'MINIMUM_PARTICIPANTS_NOT_MET',
+            message: 'Room does not have enough joined participants to start.',
+          });
+        }
 
-      const gameRoomMission =
-        await this.gameRoomMissionsService.createMissionForGameStart({
+        if (joinedParticipantCount > gameRoom.maxParticipants) {
+          throw new ConflictException({
+            code: 'MAXIMUM_PARTICIPANTS_EXCEEDED',
+            message: 'Room exceeds the maximum participant limit.',
+          });
+        }
+
+        const gameRoomMission =
+          await this.gameRoomMissionsService.createMissionForGameStart({
+            manager,
+            gameRoomId: gameRoom.id,
+            roomDifficulty: gameRoom.difficulty,
+            missionTemplateId: input.missionTemplateId,
+          });
+        preparedRuntimeContainerId = gameRoomMission.containerId;
+
+        const currentTurn = await this.turnsService.createInitialTurn({
           manager,
           gameRoomId: gameRoom.id,
-          roomDifficulty: gameRoom.difficulty,
-          missionTemplateId: input.missionTemplateId,
-          runtimeContainerId: input.runtimeContainerId,
+          missionId: gameRoomMission.id,
+          timeLimitSeconds: gameRoom.timeLimitSeconds,
         });
-      const currentTurn = await this.turnsService.createInitialTurn({
-        manager,
-        gameRoomId: gameRoom.id,
-        missionId: gameRoomMission.id,
-        timeLimitSeconds: gameRoom.timeLimitSeconds,
+        const currentStep =
+          await this.gameRoomMissionsService.transitionCurrentStepToInProgress({
+            manager,
+            gameRoomMissionId: gameRoomMission.id,
+          });
+
+        gameRoom.status = GameRoomStatus.IN_PROGRESS;
+        const savedGameRoom = await roomRepository.save(gameRoom);
+
+        return {
+          gameRoom: savedGameRoom,
+          gameRoomMission,
+          currentTurn,
+          currentStep,
+        };
       });
-      const currentStep =
-        await this.gameRoomMissionsService.transitionCurrentStepToInProgress({
-          manager,
-          gameRoomMissionId: gameRoomMission.id,
-        });
 
-      gameRoom.status = GameRoomStatus.IN_PROGRESS;
-      const savedGameRoom = await roomRepository.save(gameRoom);
+      preparedRuntimeContainerId = null;
 
-      return {
-        gameRoom: savedGameRoom,
-        gameRoomMission,
-        currentTurn,
-        currentStep,
-      };
-    });
+      return result;
+    } catch (error) {
+      if (preparedRuntimeContainerId) {
+        await this.gameRoomMissionsService.releasePreparedRuntimeContainer(
+          preparedRuntimeContainerId,
+        );
+      }
+
+      throw error;
+    }
   }
 
   private async ensureNoWaitingRoomMembership(

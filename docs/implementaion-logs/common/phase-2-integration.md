@@ -188,3 +188,82 @@
 - Start `C5` from `TurnsService`, `RealtimeTurnTimeoutService`, and `RealtimeEventSupportService`. Preserve the single authoritative turn-end pipeline instead of adding side paths for submit, timeout, or disconnect cleanup.
 - When tightening authorization or duplicate-submit handling, keep the server-time authority rule and do not reintroduce client-timestamp trust for turn completion.
 - If you need to change event payloads, check `docs/specs/05-api-and-realtime.md` first and update both `turns.service.ts` and the realtime support tests together.
+
+---
+
+## [2026-05-30] Task 3: Prepare the room-mission container from the seeded Docker image
+
+**Plan reference:** `docs/plans/calculator-mission-template-runtime-judging-plan.md`
+
+**Summary:**
+- 게임 시작 시 미션 템플릿의 `docker_image_id`를 `DockerImageEntity`로 조회하고, 시드된 `imageUri`로 room-mission 런타임 컨테이너를 준비한 뒤 `game_room_missions.container_id`에 저장했습니다.
+- 런타임 준비 실패는 `RUNTIME_CONTAINER_PREPARATION_FAILED`로 명시적으로 반환하며, 클라이언트에는 고정 도메인 메시지만 노출합니다.
+- 컨테이너 생성 후 미션/턴/start flow 실패 및 transaction commit 실패 시 `removeMissionContainer` 기반 best-effort cleanup을 수행합니다.
+
+**Dependencies reviewed before starting:**
+- `docs/plans/calculator-mission-template-runtime-judging-plan.md` — Task 3 acceptance criteria
+- `docs/implementaion-logs/README.md` — logging contract
+- `docs/implementaion-logs/common/phase-1-foundation.md` — Task 1 and Task 2 handoff
+- `docs/specs/07-integrations-and-ai.md` — Confirmed Docker Model and game-start container lifecycle
+- `docs/specs/06-gameplay-lifecycle.md` — game start authority boundary
+
+**Implementation details:**
+- `GameRoomMissionsService.createMissionForGameStart()`는 미션 ID를 선할당한 뒤 `RuntimeAdapter.prepareMissionContainer()`를 호출하고, 성공 시에만 미션/스텝 레코드를 저장합니다.
+- `validateMissionTemplateSelection()`은 `dockerImage` relation을 함께 로드하며, 누락 시 `MISSION_TEMPLATE_DOCKER_IMAGE_NOT_FOUND`를 반환합니다.
+- `DockerRuntimeAdapter.removeMissionContainer()`를 추가해 `docker rm -f`로 준비된 컨테이너를 정리합니다.
+- `GameRoomMissionsService.releasePreparedRuntimeContainer()`는 cleanup 실패를 warn 로그로만 남기고 start flow 예외 전파를 막지 않습니다.
+- `GameRoomsService.startGame()`은 `preparedRuntimeContainerId`를 transaction 바깥에서 추적하고, transaction promise reject(commit 포함) 시에도 cleanup이 실행되도록 바깥 `try/catch`로 감쌌습니다. transaction이 성공적으로 resolve된 뒤에만 cleanup 대상 ID를 해제합니다.
+- 클라이언트가 주입하던 `runtimeContainerId` 경로는 제거했습니다. 컨테이너 ID는 서버 런타임 어댑터만 소유합니다.
+
+**Files changed:**
+- `src/integrations/runtime/runtime.interfaces.ts`
+- `src/integrations/runtime/runtime-defaults.service.ts`
+- `src/integrations/runtime/runtime-defaults.service.spec.ts`
+- `src/modules/game-room-missions/game-room-missions.module.ts`
+- `src/modules/game-room-missions/service/game-room-missions.service.ts`
+- `src/modules/game-room-missions/service/game-room-missions.service.spec.ts`
+- `src/modules/game-rooms/service/game-rooms.service.ts`
+- `src/modules/game-rooms/service/game-rooms.service.spec.ts`
+- `src/test/scenarios/spec-validation.scenarios.spec.ts`
+- `docs/implementaion-logs/common/phase-2-integration.md`
+
+**Verification:**
+- [x] `pnpm test -- src/modules/game-rooms/service/game-rooms.service.spec.ts`
+- [x] `pnpm test -- src/modules/game-room-missions/service/game-room-missions.service.spec.ts`
+- [x] `pnpm test -- src/integrations/runtime/runtime-defaults.service.spec.ts`
+- [x] `pnpm typecheck`
+- [x] Manual check: game-start container lifecycle가 `docs/specs/07-integrations-and-ai.md`의 prepare-at-start / store `container_id` 흐름과 일치함
+- [x] Subagent review 3회 반영 — orphan cleanup, 고정 오류 메시지, transaction commit 실패 cleanup; 최종 피드백 없음
+
+**Commit:**
+- feat(runtime): 게임 시작 시 미션 런타임 컨테이너 준비
+
+**Impact on next tasks:**
+- Task 4 can execute stdin-driven cases against `game_room_missions.container_id` without inventing a second container-preparation path.
+- Task 5 judging should assume the active room-mission container already exists at game start and treat missing containers as explicit runtime errors only when preparation was skipped or cleanup removed it.
+
+**Design decisions made:**
+- Container preparation stays inside `GameRoomMissionsService` while Docker invocation remains in `integrations/runtime`, preserving execution-only runtime boundaries from the plan.
+- Cleanup is best-effort rather than blocking rollback completion. A failed `docker rm -f` is logged but does not mask the original start failure.
+- Transaction commit failure cleanup uses an outer `try/catch` around `dataSource.transaction()` because TypeORM rejects the transaction promise after callback success when commit fails, which inner callback catches cannot observe.
+
+**Deviations from spec:**
+- None intended. Runtime preparation does not perform judging or mutate strike/step state.
+
+**Trade-offs:**
+- Docker container creation runs while the game-start DB transaction is open. This keeps mission/container pairing simple but can hold advisory locks slightly longer and may leave a short-lived orphan if cleanup itself fails.
+- Commit-failure regression is simulated by mocking `dataSource.transaction()` to throw after callback success, not by driving a real Postgres commit failure in CI.
+
+**Open questions:**
+- [x] Should clients supply `runtimeContainerId` on game start? → No. Server-owned container preparation only.
+- [x] Should Docker stderr be returned in `RUNTIME_CONTAINER_PREPARATION_FAILED.message`? → No. Fixed client message plus internal error logging only.
+- [x] Should cleanup run when transaction commit fails after callback success? → Yes. Outer transaction `try/catch` tracks `preparedRuntimeContainerId` until the transaction promise resolves.
+
+**Open risks or follow-ups:**
+- If `removeMissionContainer` repeatedly fails, orphaned containers may still accumulate and need operational cleanup tooling outside this task.
+- Task 4 should not change container ownership; extend execution input only.
+
+**Instructions for the next worker:**
+- Read `database/seeds/docker_images.json` and the Task 2 log before extending runtime execution for stdin.
+- Reuse `game_room_missions.container_id` from the live mission; do not prepare a second container per turn.
+- Preserve `releasePreparedRuntimeContainer()` semantics when touching game start; any new failure path after container preparation must participate in the same cleanup contract.

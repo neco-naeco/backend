@@ -6,6 +6,7 @@ import type {
   CommandRunnerResult,
   ExecuteMissionCodeInput,
   PrepareMissionContainerInput,
+  RemoveMissionContainerInput,
   RuntimeAdapter,
   RuntimeCommandRunner,
   RuntimeContainerHandle,
@@ -132,6 +133,23 @@ export class DockerRuntimeAdapter implements RuntimeAdapter {
     return {
       containerId: result.stdout.trim(),
     };
+  }
+
+  async removeMissionContainer(input: RemoveMissionContainerInput): Promise<void> {
+    const result = await this.commandRunner.run({
+      command: 'docker',
+      args: ['rm', '-f', input.containerId],
+    });
+
+    if (result.timedOut) {
+      throw new Error(`Docker runtime container removal timed out: ${input.containerId}`);
+    }
+
+    if (result.exitCode !== 0) {
+      throw new Error(
+        result.stderr || `Docker runtime container removal failed: ${input.containerId}`,
+      );
+    }
   }
 
   async executeMissionCode(

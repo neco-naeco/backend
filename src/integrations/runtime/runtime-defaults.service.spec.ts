@@ -37,9 +37,10 @@ describe('DockerRuntimeAdapter', () => {
       containerId: 'container-123',
     });
 
-    expect(runner.run).toHaveBeenCalledWith({
-      command: 'docker',
-      args: [
+    expect(runner.run).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: 'docker',
+        args: [
         'run',
         '-d',
         '--cpus',
@@ -64,6 +65,40 @@ describe('DockerRuntimeAdapter', () => {
         '-lc',
         'tail -f /dev/null',
       ],
+      }),
+    );
+  });
+
+  it('removes a prepared mission container with docker rm -f', async () => {
+    const runner = {
+      run: jest.fn().mockResolvedValue({
+        stdout: 'runtime-container-1\n',
+        stderr: '',
+        exitCode: 0,
+        timedOut: false,
+      }),
+    };
+
+    const moduleRef = await Test.createTestingModule({
+      imports: [ConfigModule.forRoot({ isGlobal: true, load: [runtimeConfig] })],
+      providers: [
+        DockerRuntimeAdapter,
+        {
+          provide: DockerCliCommandRunner,
+          useValue: runner,
+        },
+      ],
+    }).compile();
+
+    const adapter = moduleRef.get(DockerRuntimeAdapter);
+
+    await expect(
+      adapter.removeMissionContainer({ containerId: 'runtime-container-1' }),
+    ).resolves.toBeUndefined();
+
+    expect(runner.run).toHaveBeenCalledWith({
+      command: 'docker',
+      args: ['rm', '-f', 'runtime-container-1'],
     });
   });
 

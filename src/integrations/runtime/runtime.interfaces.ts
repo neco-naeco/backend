@@ -46,10 +46,15 @@ export type RuntimeExecutionResult =
   | RuntimeExecutionTimeoutResult
   | RuntimeExecutionFailureResult;
 
+export interface RemoveMissionContainerInput {
+  containerId: string;
+}
+
 export interface RuntimeAdapter {
   prepareMissionContainer(
     input: PrepareMissionContainerInput,
   ): Promise<RuntimeContainerHandle>;
+  removeMissionContainer(input: RemoveMissionContainerInput): Promise<void>;
   executeMissionCode(
     input: ExecuteMissionCodeInput,
   ): Promise<RuntimeExecutionResult>;

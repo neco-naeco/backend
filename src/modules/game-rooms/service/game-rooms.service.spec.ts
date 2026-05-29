@@ -26,7 +26,9 @@ describe('GameRoomsService', () => {
   let gameRoomMissionsService: jest.Mocked<
     Pick<
       GameRoomMissionsService,
-      'createMissionForGameStart' | 'transitionCurrentStepToInProgress'
+      | 'createMissionForGameStart'
+      | 'transitionCurrentStepToInProgress'
+      | 'releasePreparedRuntimeContainer'
     >
   >;
   let turnsService: jest.Mocked<Pick<TurnsService, 'createInitialTurn'>>;
@@ -51,6 +53,7 @@ describe('GameRoomsService', () => {
     gameRoomMissionsService = {
       createMissionForGameStart: jest.fn(),
       transitionCurrentStepToInProgress: jest.fn(),
+      releasePreparedRuntimeContainer: jest.fn().mockResolvedValue(undefined),
     };
 
     turnsService = {
@@ -246,7 +249,6 @@ describe('GameRoomsService', () => {
         actorUserId: 'other-user',
         gameRoomId: 'room-1',
         missionTemplateId: 'template-1',
-        runtimeContainerId: 'container-1',
       }),
     ).rejects.toMatchObject({
       response: expect.objectContaining({
@@ -280,7 +282,6 @@ describe('GameRoomsService', () => {
         actorUserId: 'owner-1',
         gameRoomId: 'room-1',
         missionTemplateId: 'template-1',
-        runtimeContainerId: 'container-1',
       }),
     ).rejects.toMatchObject({
       response: expect.objectContaining({
@@ -311,6 +312,7 @@ describe('GameRoomsService', () => {
     participantRepository.count.mockResolvedValue(2);
     gameRoomMissionsService.createMissionForGameStart.mockResolvedValue({
       id: 'mission-1',
+      containerId: 'runtime-container-1',
       currentStepId: 'step-1',
     } as never);
     turnsService.createInitialTurn.mockResolvedValue({
@@ -329,7 +331,6 @@ describe('GameRoomsService', () => {
       actorUserId: 'owner-1',
       gameRoomId: 'room-1',
       missionTemplateId: 'template-1',
-      runtimeContainerId: 'container-1',
     });
 
     expect(manager.query).toHaveBeenNthCalledWith(
@@ -353,7 +354,6 @@ describe('GameRoomsService', () => {
       gameRoomId: 'room-1',
       roomDifficulty: 'EASY',
       missionTemplateId: 'template-1',
-      runtimeContainerId: 'container-1',
     });
     expect(turnsService.createInitialTurn).toHaveBeenCalledWith({
       manager,
@@ -388,6 +388,102 @@ describe('GameRoomsService', () => {
         id: 'step-1',
       }),
     });
+    expect(gameRoomMissionsService.releasePreparedRuntimeContainer).not.toHaveBeenCalled();
+  });
+
+  it('removes a prepared runtime container when later start flow steps fail', async () => {
+    roomRepository.findOne.mockResolvedValue({
+      id: 'room-1',
+      ownerUserId: 'owner-1',
+      status: GameRoomStatus.WAITING,
+      difficulty: 'EASY',
+      timeLimitSeconds: 30,
+      minParticipants: 2,
+      maxParticipants: 4,
+    } as GameRoomEntity);
+    participantRepository.findOne.mockResolvedValue({
+      id: 'owner-participant-1',
+      gameRoomId: 'room-1',
+      userId: 'owner-1',
+      role: GameRoomParticipantRole.OWNER,
+      membershipStatus: GameRoomParticipantMembershipStatus.JOINED,
+    } as GameRoomParticipantEntity);
+    participantRepository.count.mockResolvedValue(2);
+    gameRoomMissionsService.createMissionForGameStart.mockResolvedValue({
+      id: 'mission-1',
+      containerId: 'runtime-container-1',
+      currentStepId: 'step-1',
+    } as never);
+    turnsService.createInitialTurn.mockRejectedValue(new Error('turn creation failed'));
+
+    await expect(
+      service.startGame({
+        actorUserId: 'owner-1',
+        gameRoomId: 'room-1',
+        missionTemplateId: 'template-1',
+      }),
+    ).rejects.toThrow('turn creation failed');
+
+    expect(gameRoomMissionsService.releasePreparedRuntimeContainer).toHaveBeenCalledWith(
+      'runtime-container-1',
+    );
+    expect(roomRepository.save).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: GameRoomStatus.IN_PROGRESS,
+      }),
+    );
+  });
+
+  it('removes a prepared runtime container when transaction commit fails after callback success', async () => {
+    roomRepository.findOne.mockResolvedValue({
+      id: 'room-1',
+      ownerUserId: 'owner-1',
+      status: GameRoomStatus.WAITING,
+      difficulty: 'EASY',
+      timeLimitSeconds: 30,
+      minParticipants: 2,
+      maxParticipants: 4,
+    } as GameRoomEntity);
+    participantRepository.findOne.mockResolvedValue({
+      id: 'owner-participant-1',
+      gameRoomId: 'room-1',
+      userId: 'owner-1',
+      role: GameRoomParticipantRole.OWNER,
+      membershipStatus: GameRoomParticipantMembershipStatus.JOINED,
+    } as GameRoomParticipantEntity);
+    participantRepository.count.mockResolvedValue(2);
+    gameRoomMissionsService.createMissionForGameStart.mockResolvedValue({
+      id: 'mission-1',
+      containerId: 'runtime-container-1',
+      currentStepId: 'step-1',
+    } as never);
+    turnsService.createInitialTurn.mockResolvedValue({
+      id: 'turn-1',
+      playerUserId: 'owner-1',
+      turnNumber: 1,
+      status: 'IN_PROGRESS',
+    } as never);
+    gameRoomMissionsService.transitionCurrentStepToInProgress.mockResolvedValue({
+      id: 'step-1',
+      status: 'IN_PROGRESS',
+    } as never);
+    roomRepository.save.mockImplementation(async (room) => room as never);
+    dataSource.transaction = jest.fn(async (callback) => {
+      await callback(manager);
+      throw new Error('transaction commit failed');
+    });
+
+    await expect(
+      service.startGame({
+        actorUserId: 'owner-1',
+        gameRoomId: 'room-1',
+        missionTemplateId: 'template-1',
+      }),
+    ).rejects.toThrow('transaction commit failed');
+
+    expect(gameRoomMissionsService.releasePreparedRuntimeContainer).toHaveBeenCalledWith(
+      'runtime-container-1',
+    );
   });
 
   it('finishes the room when joined participants fall below minParticipants', async () => {

@@ -1,6 +1,8 @@
 /// <reference types="jest" />
 
+import type { RuntimeAdapter } from '@integrations/runtime/runtime.interfaces';
 import { DataSource, EntityManager, Repository } from 'typeorm';
+import { DockerImageEntity } from '@modules/docker-images/entity/docker-image.entity';
 import { GameRoomParticipantEntity } from '@modules/game-room-participants/entity/game-room-participant.entity';
 import {
   GameRoomMissionStepStatus,
@@ -11,6 +13,10 @@ import { GameRoomMissionStepEntity } from '../entity/game-room-mission-step.enti
 import { MissionTemplateEntity } from '../entity/mission-template.entity';
 import { MissionTemplateStepEntity } from '../entity/mission-template-step.entity';
 import { GameRoomMissionsService } from './game-room-missions.service';
+
+jest.mock('node:crypto', () => ({
+  randomUUID: jest.fn(() => 'room-mission-1'),
+}));
 
 describe('GameRoomMissionsService', () => {
   let service: GameRoomMissionsService;
@@ -31,8 +37,17 @@ describe('GameRoomMissionsService', () => {
   >;
   let manager: jest.Mocked<Pick<EntityManager, 'getRepository'>>;
   let dataSource: { getRepository: jest.Mock };
+  let runtimeAdapter: jest.Mocked<
+    Pick<RuntimeAdapter, 'prepareMissionContainer' | 'removeMissionContainer'>
+  >;
 
   beforeEach(() => {
+    runtimeAdapter = {
+      prepareMissionContainer: jest.fn().mockResolvedValue({
+        containerId: 'runtime-container-1',
+      }),
+      removeMissionContainer: jest.fn().mockResolvedValue(undefined),
+    };
     missionTemplateRepository = {
       findOne: jest.fn(),
     };
@@ -97,13 +112,21 @@ describe('GameRoomMissionsService', () => {
       }),
     };
 
-    service = new GameRoomMissionsService(dataSource as unknown as DataSource);
+    service = new GameRoomMissionsService(
+      dataSource as unknown as DataSource,
+      runtimeAdapter as unknown as RuntimeAdapter,
+    );
   });
 
   it('validates mission template selection before room creation', async () => {
     missionTemplateRepository.findOne.mockResolvedValue({
       id: 'template-1',
       difficulty: 'EASY',
+      dockerImage: {
+        id: 'docker-image-1',
+        imageUri: 'neconaeco/python-runner:python-3.12-v1',
+        metadataJson: { keepAliveCommand: 'tail -f /dev/null' },
+      } as unknown as DockerImageEntity,
     } as unknown as MissionTemplateEntity);
     missionTemplateStepRepository.find.mockResolvedValue([
       {
@@ -119,8 +142,28 @@ describe('GameRoomMissionsService', () => {
     );
 
     expect(result.id).toBe('template-1');
+    expect(missionTemplateRepository.findOne).toHaveBeenCalledWith({
+      where: { id: 'template-1' },
+      relations: { dockerImage: true },
+    });
     expect(dataSource.getRepository).toHaveBeenCalledWith(MissionTemplateEntity);
     expect(dataSource.getRepository).toHaveBeenCalledWith(MissionTemplateStepEntity);
+  });
+
+  it('rejects mission template selection when the linked docker image is missing', async () => {
+    missionTemplateRepository.findOne.mockResolvedValue({
+      id: 'template-1',
+      difficulty: 'EASY',
+      dockerImage: null,
+    } as unknown as MissionTemplateEntity);
+
+    await expect(
+      service.validateMissionTemplateSelection('EASY', 'template-1'),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({
+        code: 'MISSION_TEMPLATE_DOCKER_IMAGE_NOT_FOUND',
+      }),
+    });
   });
 
   it('creates a room mission with the first step ready and later steps locked', async () => {
@@ -134,6 +177,11 @@ describe('GameRoomMissionsService', () => {
       defaultTimeLimitSeconds: 300,
       defaultMaxStrikeCount: 3,
       dockerImageId: 'docker-image-1',
+      dockerImage: {
+        id: 'docker-image-1',
+        imageUri: 'neconaeco/python-runner:python-3.12-v1',
+        metadataJson: { keepAliveCommand: 'tail -f /dev/null' },
+      } as unknown as DockerImageEntity,
       successCriteria: 'All calculator steps pass.',
       judgePolicyJson: { judge: 'strict' },
       projectStructureJson: { files: [{ filePath: 'src/app.ts' }] },
@@ -185,15 +233,21 @@ describe('GameRoomMissionsService', () => {
       gameRoomId: 'room-1',
       roomDifficulty: 'EASY',
       missionTemplateId: 'template-1',
-      runtimeContainerId: 'container-1',
     });
 
+    expect(runtimeAdapter.prepareMissionContainer).toHaveBeenCalledWith({
+      gameRoomId: 'room-1',
+      missionId: 'room-mission-1',
+      image: 'neconaeco/python-runner:python-3.12-v1',
+      keepAliveCommand: 'tail -f /dev/null',
+    });
     expect(gameRoomMissionRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({
+        id: 'room-mission-1',
         gameRoomId: 'room-1',
         missionTemplateId: 'template-1',
         strikeCount: 0,
-        containerId: 'container-1',
+        containerId: 'runtime-container-1',
         judgePolicyJson: { judge: 'strict' },
         projectStructureJson: { files: [{ filePath: 'src/app.ts' }] },
         currentStepId: null,
@@ -221,6 +275,106 @@ describe('GameRoomMissionsService', () => {
     expect(result.currentStepId).toBe('room-mission-step-1');
   });
 
+  it('surfaces runtime preparation failures without persisting a started mission', async () => {
+    gameRoomMissionRepository.findOne.mockResolvedValue(null);
+    missionTemplateRepository.findOne.mockResolvedValue({
+      id: 'template-1',
+      title: 'Calculator',
+      description: 'Build a calculator.',
+      language: 'python',
+      difficulty: 'EASY',
+      defaultTimeLimitSeconds: 300,
+      defaultMaxStrikeCount: 3,
+      dockerImageId: 'docker-image-1',
+      dockerImage: {
+        id: 'docker-image-1',
+        imageUri: 'neconaeco/python-runner:python-3.12-v1',
+        metadataJson: null,
+      } as unknown as DockerImageEntity,
+      successCriteria: 'All calculator steps pass.',
+      judgePolicyJson: {},
+      projectStructureJson: {},
+      steps: [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as unknown as MissionTemplateEntity);
+    missionTemplateStepRepository.find.mockResolvedValue([
+      {
+        id: 'template-step-1',
+        missionTemplateId: 'template-1',
+        stepOrder: 1,
+      } as MissionTemplateStepEntity,
+    ]);
+    runtimeAdapter.prepareMissionContainer.mockRejectedValue(
+      new Error('Docker runtime container preparation failed'),
+    );
+
+    await expect(
+      service.createMissionForGameStart({
+        manager: manager as unknown as EntityManager,
+        gameRoomId: 'room-1',
+        roomDifficulty: 'EASY',
+        missionTemplateId: 'template-1',
+      }),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({
+        code: 'RUNTIME_CONTAINER_PREPARATION_FAILED',
+        message: 'Failed to prepare the mission runtime container.',
+      }),
+    });
+
+    expect(gameRoomMissionRepository.save).not.toHaveBeenCalled();
+    expect(runtimeAdapter.removeMissionContainer).not.toHaveBeenCalled();
+  });
+
+  it('removes a prepared runtime container when mission persistence fails after preparation', async () => {
+    gameRoomMissionRepository.findOne.mockResolvedValue(null);
+    missionTemplateRepository.findOne.mockResolvedValue({
+      id: 'template-1',
+      title: 'Calculator',
+      description: 'Build a calculator.',
+      language: 'python',
+      difficulty: 'EASY',
+      defaultTimeLimitSeconds: 300,
+      defaultMaxStrikeCount: 3,
+      dockerImageId: 'docker-image-1',
+      dockerImage: {
+        id: 'docker-image-1',
+        imageUri: 'neconaeco/python-runner:python-3.12-v1',
+        metadataJson: { keepAliveCommand: 'tail -f /dev/null' },
+      } as unknown as DockerImageEntity,
+      successCriteria: 'All calculator steps pass.',
+      judgePolicyJson: {},
+      projectStructureJson: {},
+      steps: [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as unknown as MissionTemplateEntity);
+    missionTemplateStepRepository.find.mockResolvedValue([
+      {
+        id: 'template-step-1',
+        missionTemplateId: 'template-1',
+        stepOrder: 1,
+      } as MissionTemplateStepEntity,
+    ]);
+    gameRoomMissionRepository.create.mockImplementation((mission) => mission as never);
+    gameRoomMissionRepository.save.mockRejectedValueOnce(new Error('mission save failed'));
+
+    await expect(
+      service.createMissionForGameStart({
+        manager: manager as unknown as EntityManager,
+        gameRoomId: 'room-1',
+        roomDifficulty: 'EASY',
+        missionTemplateId: 'template-1',
+      }),
+    ).rejects.toThrow('mission save failed');
+
+    expect(runtimeAdapter.prepareMissionContainer).toHaveBeenCalled();
+    expect(runtimeAdapter.removeMissionContainer).toHaveBeenCalledWith({
+      containerId: 'runtime-container-1',
+    });
+  });
+
   it('rejects game start when the selected template difficulty does not match the room', async () => {
     gameRoomMissionRepository.findOne.mockResolvedValue(null);
     missionTemplateRepository.findOne.mockResolvedValue({
@@ -232,6 +386,11 @@ describe('GameRoomMissionsService', () => {
       defaultTimeLimitSeconds: 300,
       defaultMaxStrikeCount: 3,
       dockerImageId: 'docker-image-1',
+      dockerImage: {
+        id: 'docker-image-1',
+        imageUri: 'neconaeco/python-runner:python-3.12-v1',
+        metadataJson: null,
+      } as unknown as DockerImageEntity,
       successCriteria: 'All calculator steps pass.',
       judgePolicyJson: {},
       projectStructureJson: {},
@@ -246,13 +405,13 @@ describe('GameRoomMissionsService', () => {
         gameRoomId: 'room-1',
         roomDifficulty: 'EASY',
         missionTemplateId: 'template-1',
-        runtimeContainerId: 'container-1',
       }),
     ).rejects.toMatchObject({
       response: expect.objectContaining({
         code: 'MISSION_TEMPLATE_DIFFICULTY_MISMATCH',
       }),
     });
+    expect(runtimeAdapter.prepareMissionContainer).not.toHaveBeenCalled();
   });
 
   it('rejects templates without any defined steps', async () => {
@@ -266,6 +425,11 @@ describe('GameRoomMissionsService', () => {
       defaultTimeLimitSeconds: 300,
       defaultMaxStrikeCount: 3,
       dockerImageId: 'docker-image-1',
+      dockerImage: {
+        id: 'docker-image-1',
+        imageUri: 'neconaeco/python-runner:python-3.12-v1',
+        metadataJson: null,
+      } as unknown as DockerImageEntity,
       successCriteria: 'All calculator steps pass.',
       judgePolicyJson: {},
       projectStructureJson: {},
@@ -281,13 +445,13 @@ describe('GameRoomMissionsService', () => {
         gameRoomId: 'room-1',
         roomDifficulty: 'EASY',
         missionTemplateId: 'template-1',
-        runtimeContainerId: 'container-1',
       }),
     ).rejects.toMatchObject({
       response: expect.objectContaining({
         code: 'MISSION_TEMPLATE_STEPS_REQUIRED',
       }),
     });
+    expect(runtimeAdapter.prepareMissionContainer).not.toHaveBeenCalled();
   });
 
   it('returns the current-step hint for a joined room participant', async () => {

@@ -93,7 +93,6 @@ describe('Spec validation scenarios (docs/specs/08-security-testing-and-delivery
           actorUserId: 'guest',
           gameRoomId: 'room-1',
           missionTemplateId: 'template-1',
-          runtimeContainerId: 'container-1',
         }),
       ).rejects.toMatchObject({
         response: { code: 'GAME_ROOM_OWNER_REQUIRED' },
