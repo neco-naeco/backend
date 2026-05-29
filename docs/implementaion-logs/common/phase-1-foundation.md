@@ -267,3 +267,82 @@
 - 계산기 seed에는 `mission_templates.title`, `description`, `language`, `successCriteria`, `defaultTimeLimitSeconds`, `defaultMaxStrikeCount`를 반드시 채울 것.
 - 스텝 seed에는 `title`, `description`, `successCriteria`, `targetFilePath`, `hintText`, `judgePolicyJson`을 반드시 채울 것.
 - `successCriteriaJson` legacy 컬럼에 새 seed 데이터를 의존시키지 말 것.
+
+---
+
+## [2026-05-30] Task 2: Add seed infrastructure and calculator mission seed data
+
+**Plan reference:** `docs/plans/calculator-mission-template-runtime-judging-plan.md`
+
+**Summary:**
+- 계산기 미션용 repository seed 파일 3개(`docker_images`, `mission_templates`, `mission_template_steps`)를 추가했습니다.
+- 애플리케이션 부트스트랩에서 도커 이미지, 미션 템플릿, 6개 미션 스텝을 트랜잭션으로 upsert하는 `MissionSeedService`를 추가했습니다.
+
+**Dependencies reviewed before starting:**
+- `docs/plans/calculator-mission-template-runtime-judging-plan.md` — Task 2 acceptance criteria
+- `docs/specs/00-overview.md` — source hierarchy and conflict policy
+- `docs/specs/02-domain-model.md` — Mission Template, Mission Template Step, Docker Image domain terms
+- `docs/specs/04-data-model.md` — snake_case persistence and jsonb payload rules
+- `docs/specs/06-gameplay-lifecycle.md` — game start and turn judgment flow context
+- `docs/specs/07-integrations-and-ai.md` — Docker runtime lifecycle and server authority boundary
+- `docs/implementaion-logs/README.md` — logging and task completion contract
+- `docs/implementaion-logs/common/phase-1-foundation.md` — Task 1 handoff and open question review
+
+**Implementation details:**
+- `database/seeds/docker_images.json`에 단일 Python runner image reference를 추가했습니다.
+- `database/seeds/mission_templates.json`에 Python-only, prompt-free stdin flow, `stdout.trim()` exact comparison, stderr empty, exit code 0 기준의 calculator judge policy를 추가했습니다.
+- `judgePolicyJson.steps[]`에는 step order별 public test case bundle을 두고, 후속 step이 이전 연산 회귀를 잡도록 cumulative case를 포함했습니다.
+- `projectStructureJson.files`에는 writable `main.py` skeleton과 read-only `README.md`를 포함했습니다.
+- `database/seeds/mission_template_steps.json`에는 6개 단계의 title, description, target file, success criteria, hint text, step judge policy reference를 추가했습니다.
+- `MissionSeedService`는 `docker_images` → `mission_templates` → `mission_template_steps` 순서로 한 트랜잭션 안에서 upsert합니다.
+- 재시드 시 기존 logical step(`missionTemplateId`, `stepOrder`)의 primary key를 바꾸지 않아 live `game_room_mission_steps` FK를 깨지 않도록 했습니다.
+- 미션 seed 실패는 필수 런타임 기준 데이터 누락이므로 로그 후 rethrow하여 bootstrap failure로 노출합니다.
+
+**Files changed:**
+- `database/seeds/docker_images.json`
+- `database/seeds/mission_templates.json`
+- `database/seeds/mission_template_steps.json`
+- `src/modules/game-room-missions/game-room-missions.module.ts`
+- `src/modules/game-room-missions/service/mission-seed.service.ts`
+- `src/modules/game-room-missions/service/mission-seed.service.spec.ts`
+
+**Verification:**
+- [x] `pnpm test -- src/modules/prompt-template/prompt-template-seed.service.spec.ts`
+- [x] `pnpm test -- src/modules/game-room-missions/service/game-room-missions.service.spec.ts src/modules/game-room-missions/service/mission-seed.service.spec.ts`
+- [x] `pnpm typecheck`
+- [x] `pnpm exec eslint src/modules/game-room-missions/service/mission-seed.service.ts src/modules/game-room-missions/game-room-missions.module.ts`
+- [x] Manual JSON parse and seed shape check: 1 docker image, 1 mission template, 6 steps, `main.py` writable, `README.md` read-only, exact calculator error strings present
+- [x] GPT 5.4 subagent review — initial findings on step PK rewrite, cumulative division case coverage, fail-fast bootstrap, and idempotence test coverage were fixed; re-review reported no blocking findings
+
+**Commit:**
+- `f87ada2` feat(mission): 계산기 미션 시드 추가
+
+**Impact on next tasks:**
+- Task 3 can resolve `mission_templates.docker_image_id` to the seeded Python runner image metadata.
+- Task 5 can read public per-step cases from `mission_templates.judge_policy_json.steps[]`.
+- Calculator mission startup now depends on seed import succeeding during application bootstrap.
+
+**Design decisions made:**
+- Mission seed bootstrap fails fast instead of swallowing seed errors. This differs from prompt-template cache seeding because calculator mission records are required runtime baseline data, not optional prompt cache refresh support.
+- Step seed upsert preserves existing logical row IDs when a row already exists for `(missionTemplateId, stepOrder)` to avoid breaking historical/live room mission step references.
+- Public test case bundles are stored at the mission template root and step records reference their bundle by `stepOrder`, matching the plan’s root `judgePolicyJson` direction while keeping step metadata human-readable.
+
+**Deviations from spec:**
+- None for Task 2. The Task 1 legacy `mission_template_steps.success_criteria_json` column remains outside this task’s scope and is populated with compatibility metadata by the seed service.
+
+**Trade-offs:**
+- Seed records use stable UUIDs committed in JSON rather than generated IDs. This keeps local, test, and future environment baselines deterministic.
+- The calculator cases intentionally stay small and public-only. Hidden tests or flexible grading were excluded to preserve the MVP scope and server-side deterministic judging contract.
+
+**Open questions:**
+- [x] Should mission seed bootstrap continue on import failure like prompt-template seeding? → No. Calculator mission data is required for runtime selection and judging, so fail-fast is safer.
+- [ ] When should legacy `mission_template_steps.success_criteria_json` be removed? → Still unresolved from Task 1; not required for Task 2.
+
+**Open risks or follow-ups:**
+- Task 3 must map the seeded `DockerImageEntity.imageUri` to runtime container preparation without hardcoding image strings elsewhere.
+- Task 5 must use `stdout.trim()` exact comparison and require empty stderr to preserve the seed’s comparison policy.
+
+**Instructions for the next worker:**
+- Read `database/seeds/mission_templates.json` before implementing runtime preparation or judging; it is now the canonical calculator mission contract.
+- Preserve `judgePolicyJson.steps[].testCases[].stdinLines` and `expectedStdout` shapes when wiring Task 5.
+- Do not rewrite existing `mission_template_steps.id` values during future seed updates; use logical step identity for updates.
