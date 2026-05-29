@@ -30,6 +30,10 @@ This includes:
 - Worker 2: [`worker-2-room-participant-mission-plan.md`](./worker-2-room-participant-mission-plan.md)
 - Worker 3: [`worker-3-realtime-runtime-execution-plan.md`](./worker-3-realtime-runtime-execution-plan.md)
 
+### Focused follow-up plans
+
+- Calculator mission template, runtime, and step judging: [`calculator-mission-template-runtime-judging-plan.md`](./calculator-mission-template-runtime-judging-plan.md)
+
 ## Parallelization Rules
 
 - Do not start any worker stream before the shared foundation checkpoint in `common-sequential-plan.md` is complete.
