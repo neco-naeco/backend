@@ -1,4 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { AiRealtimeEventType } from '@shared/enums';
 import { RealtimeGateway } from '../gateway/realtime.gateway';
 import {
@@ -25,7 +26,7 @@ export class RealtimeEventSupportService {
   private readonly logger = new Logger(RealtimeEventSupportService.name);
 
   constructor(
-    private readonly realtimeGateway: RealtimeGateway,
+    private readonly moduleRef: ModuleRef,
     @Inject(REALTIME_ASSISTIVE_MESSAGE_SERVICE)
     private readonly assistiveMessageService: RealtimeAssistiveMessageService,
     @Inject(REALTIME_SUPPORT_STATE_STORE)
@@ -33,11 +34,11 @@ export class RealtimeEventSupportService {
   ) {}
 
   publishTurnSubmit(event: TurnSubmitEvent): void {
-    this.realtimeGateway.emitToRoom(event.gameRoomId, REALTIME_EVENT.TURN_SUBMIT, event);
+    this.emitToRoom(event.gameRoomId, REALTIME_EVENT.TURN_SUBMIT, event);
   }
 
   publishRoomParticipantsUpdated(event: RoomParticipantsUpdatedEvent): void {
-    this.realtimeGateway.emitToRoom(
+    this.emitToRoom(
       event.gameRoomId,
       REALTIME_EVENT.ROOM_PARTICIPANTS_UPDATED,
       event,
@@ -81,7 +82,7 @@ export class RealtimeEventSupportService {
       occurredAt: event.occurredAt,
     });
 
-    this.realtimeGateway.emitToRoom(
+    this.emitToRoom(
       event.gameRoomId,
       REALTIME_EVENT.GAME_STARTED,
       event,
@@ -96,7 +97,7 @@ export class RealtimeEventSupportService {
       payload: event.evaluationResult,
     });
 
-    this.realtimeGateway.emitToRoom(
+    this.emitToRoom(
       event.gameRoomId,
       REALTIME_EVENT.TURN_EVALUATED,
       enrichedEvent,
@@ -124,7 +125,7 @@ export class RealtimeEventSupportService {
       });
     }
 
-    this.realtimeGateway.emitToRoom(
+    this.emitToRoom(
       event.gameRoomId,
       REALTIME_EVENT.TURN_CHANGED,
       event,
@@ -141,7 +142,7 @@ export class RealtimeEventSupportService {
       payload: event.gameState,
     });
 
-    this.realtimeGateway.emitToRoom(
+    this.emitToRoom(
       event.gameRoomId,
       REALTIME_EVENT.GAME_STATE_UPDATED,
       enrichedEvent,
@@ -155,11 +156,21 @@ export class RealtimeEventSupportService {
       payload: event.missionResult,
     });
 
-    this.realtimeGateway.emitToRoom(
+    this.emitToRoom(
       event.gameRoomId,
       REALTIME_EVENT.MISSION_RESULT,
       enrichedEvent,
     );
+  }
+
+  private emitToRoom(
+    gameRoomId: string,
+    event: string,
+    payload: Parameters<RealtimeGateway['emitToRoom']>[2],
+  ): void {
+    this.moduleRef
+      .get(RealtimeGateway, { strict: false })
+      .emitToRoom(gameRoomId, event, payload);
   }
 
   private async attachNotice<T extends { aiNotice?: RealtimeAssistiveNotice | null }>(

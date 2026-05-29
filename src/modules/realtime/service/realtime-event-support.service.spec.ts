@@ -1,4 +1,5 @@
 import { AiRealtimeEventType } from '@shared/enums';
+import type { ModuleRef } from '@nestjs/core';
 import type { RealtimeGateway } from '../gateway/realtime.gateway';
 import type {
   RealtimeAssistiveMessageService,
@@ -8,6 +9,7 @@ import { RealtimeEventSupportService } from './realtime-event-support.service';
 
 describe('RealtimeEventSupportService', () => {
   let realtimeGateway: jest.Mocked<Pick<RealtimeGateway, 'emitToRoom'>>;
+  let moduleRef: jest.Mocked<Pick<ModuleRef, 'get'>>;
   let assistiveMessageService: jest.Mocked<RealtimeAssistiveMessageService>;
   let supportStateStore: jest.Mocked<RealtimeSupportStateStore>;
   let service: RealtimeEventSupportService;
@@ -15,6 +17,9 @@ describe('RealtimeEventSupportService', () => {
   beforeEach(() => {
     realtimeGateway = {
       emitToRoom: jest.fn(),
+    };
+    moduleRef = {
+      get: jest.fn().mockReturnValue(realtimeGateway),
     };
     assistiveMessageService = {
       buildNotice: jest.fn().mockResolvedValue(null),
@@ -29,7 +34,7 @@ describe('RealtimeEventSupportService', () => {
     };
 
     service = new RealtimeEventSupportService(
-      realtimeGateway as unknown as RealtimeGateway,
+      moduleRef as unknown as ModuleRef,
       assistiveMessageService,
       supportStateStore,
     );
