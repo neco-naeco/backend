@@ -27,8 +27,10 @@ import {
   GameRoomMissionStepStatus,
   GameRoomParticipantMembershipStatus,
   GameRoomStatus,
+  MissionResultJudgeStatus,
   TurnStatus,
 } from '@shared/enums';
+import { ExecutionEntity } from '@modules/executions/entity/execution.entity';
 import type { TurnLifecycleResult } from '@modules/turns/service/turns.service';
 
 describe('Spec validation scenarios (docs/specs/08-security-testing-and-delivery.md)', () => {
@@ -381,7 +383,380 @@ describe('Spec validation scenarios (docs/specs/08-security-testing-and-delivery
       ).toBe(false);
     });
   });
+
+  describe('calculator mission public-case judging (docs/plans/calculator-mission-template-runtime-judging-plan.md)', () => {
+    it('passes a calculator step and publishes turn-evaluated with per-case results', async () => {
+      const { service, missionResultsService, publishTurnLifecycleResult } =
+        createCalculatorTurnsHarness({
+          executions: [
+            {
+              status: ExecutionStatus.SUCCESS,
+              exitCode: 0,
+              stdout: '5',
+              stderr: '',
+              runtimeFailureCode: null,
+              runtimeFailureMessage: null,
+            },
+            {
+              status: ExecutionStatus.SUCCESS,
+              exitCode: 0,
+              stdout: '6',
+              stderr: '',
+              runtimeFailureCode: null,
+              runtimeFailureMessage: null,
+            },
+          ],
+          missionHandlers: {
+            completeCurrentStep: jest.fn().mockResolvedValue({
+              mission: { id: 'mission-1', currentStepId: 'step-2', strikeCount: 0 },
+              nextStep: { id: 'step-2', stepOrder: 2 },
+              missionFinished: false,
+            }),
+            transitionCurrentStepToInProgress: jest.fn(),
+          },
+        });
+
+      const lifecycle = await submitCalculatorTurn(service, publishTurnLifecycleResult);
+
+      expect(lifecycle.evaluatedEvent.evaluationResult).toMatchObject({
+        judgeStatus: MissionResultJudgeStatus.PASSED,
+        stepOrder: 1,
+        stepJudgingSummary: {
+          totalCases: 2,
+          passedCount: 2,
+          failedCount: 0,
+          errorCount: 0,
+        },
+        publicCaseResults: expect.arrayContaining([
+          expect.objectContaining({ name: 'add_positive_integers', outcome: 'PASSED' }),
+        ]),
+      });
+      expect(missionResultsService.createMissionResult).toHaveBeenCalledWith(
+        expect.objectContaining({
+          judgeStatus: MissionResultJudgeStatus.PASSED,
+        }),
+      );
+      expect(lifecycle.turnChangedEvent).not.toBeNull();
+    });
+
+    it('increments strike and explains stdout mismatch without AI judgment', async () => {
+      const { service, missionResultsService, publishTurnLifecycleResult } =
+        createCalculatorTurnsHarness({
+          executions: [
+            {
+              status: ExecutionStatus.SUCCESS,
+              exitCode: 0,
+              stdout: '6',
+              stderr: '',
+              runtimeFailureCode: null,
+              runtimeFailureMessage: null,
+            },
+            {
+              status: ExecutionStatus.SUCCESS,
+              exitCode: 0,
+              stdout: '6',
+              stderr: '',
+              runtimeFailureCode: null,
+              runtimeFailureMessage: null,
+            },
+          ],
+          missionHandlers: {
+            recordFailedAttempt: jest.fn().mockResolvedValue({
+              mission: { id: 'mission-1', strikeCount: 1 },
+              currentStep: createCalculatorScenarioCurrentStep(1),
+              missionFinished: false,
+            }),
+            transitionCurrentStepToInProgress: jest.fn(),
+          },
+        });
+
+      const lifecycle = await submitCalculatorTurn(service, publishTurnLifecycleResult);
+
+      expect(lifecycle.evaluatedEvent.evaluationResult).toMatchObject({
+        judgeStatus: MissionResultJudgeStatus.FAILED,
+        strikeCount: 1,
+        detectedIssues: [
+          expect.objectContaining({
+            issueType: 'PUBLIC_TEST_CASE_FAILED',
+            caseName: 'add_positive_integers',
+          }),
+        ],
+      });
+      expect(missionResultsService.createMissionResult).toHaveBeenCalled();
+    });
+
+    it('passes unsupported-operator calculator contracts on step 5', async () => {
+      const { service, publishTurnLifecycleResult } = createCalculatorTurnsHarness({
+        stepOrder: 5,
+        testCases: [
+          {
+            name: 'unsupported_operator',
+            stdinLines: ['8', '%', '3'],
+            expectedStdout: 'ERROR: unsupported operator',
+          },
+        ],
+        executions: [
+          {
+            status: ExecutionStatus.SUCCESS,
+            exitCode: 0,
+            stdout: 'ERROR: unsupported operator',
+            stderr: '',
+            runtimeFailureCode: null,
+            runtimeFailureMessage: null,
+          },
+        ],
+        missionHandlers: {
+          completeCurrentStep: jest.fn().mockResolvedValue({
+            mission: { id: 'mission-1', strikeCount: 0 },
+            nextStep: { id: 'step-6', stepOrder: 6 },
+            missionFinished: false,
+          }),
+          transitionCurrentStepToInProgress: jest.fn(),
+        },
+      });
+
+      const lifecycle = await submitCalculatorTurn(service, publishTurnLifecycleResult);
+
+      expect(lifecycle.evaluatedEvent.evaluationResult).toMatchObject({
+        judgeStatus: MissionResultJudgeStatus.PASSED,
+        publicCaseResults: [
+          expect.objectContaining({
+            name: 'unsupported_operator',
+            outcome: 'PASSED',
+          }),
+        ],
+      });
+    });
+
+    it('keeps runtime ERROR explicit without strike increment or next turn', async () => {
+      const { service, missionResultsService, publishTurnLifecycleResult, missionHandlers } =
+        createCalculatorTurnsHarness({
+          testCases: [
+            {
+              name: 'add_positive_integers',
+              stdinLines: ['2', '+', '3'],
+              expectedStdout: '5',
+            },
+          ],
+          executions: [
+            {
+              status: ExecutionStatus.FAILED,
+              exitCode: null,
+              stdout: '',
+              stderr: '',
+              runtimeFailureCode: 'RUNTIME_EXECUTION_FAILED',
+              runtimeFailureMessage: 'Container exec failed.',
+            },
+          ],
+          missionHandlers: {
+            recordFailedAttempt: jest.fn(),
+            completeCurrentStep: jest.fn(),
+            transitionCurrentStepToInProgress: jest.fn(),
+          },
+        });
+
+      const lifecycle = await submitCalculatorTurn(service, publishTurnLifecycleResult);
+
+      expect(lifecycle.evaluatedEvent.evaluationResult).toMatchObject({
+        judgeStatus: MissionResultJudgeStatus.ERROR,
+        detectedIssues: [
+          expect.objectContaining({
+            issueType: 'RUNTIME_ERROR',
+            caseName: 'add_positive_integers',
+            message: 'Container exec failed.',
+          }),
+        ],
+      });
+      expect(missionHandlers.recordFailedAttempt).not.toHaveBeenCalled();
+      expect(lifecycle.turnChangedEvent).toBeNull();
+      expect(missionResultsService.createMissionResult).toHaveBeenCalledWith(
+        expect.objectContaining({
+          judgeStatus: MissionResultJudgeStatus.ERROR,
+        }),
+      );
+    });
+  });
 });
+
+function createCalculatorTurnsHarness(input: {
+  stepOrder?: number;
+  testCases?: Array<{
+    name: string;
+    stdinLines: string[];
+    expectedStdout: string;
+  }>;
+  executions: Array<{
+    status: ExecutionStatus;
+    exitCode: number | null;
+    stdout: string;
+    stderr: string;
+    runtimeFailureCode: string | null;
+    runtimeFailureMessage: string | null;
+  }>;
+  missionHandlers?: Record<string, jest.Mock>;
+}) {
+  const room = createScenarioRoom();
+  const mission = createCalculatorScenarioMission({
+    stepOrder: input.stepOrder,
+    testCases: input.testCases,
+  });
+  const currentStep = createCalculatorScenarioCurrentStep(input.stepOrder ?? 1);
+  const turn = createScenarioTurn();
+  const manager = createScenarioTurnManager({
+    room,
+    mission,
+    currentStep,
+    turn,
+    participants: createScenarioParticipants(),
+    snapshots: [],
+    turns: [turn],
+  });
+  const dataSource = {
+    transaction: jest.fn(async (callback: (m: EntityManager) => unknown) =>
+      callback(manager as unknown as EntityManager),
+    ),
+  } as unknown as DataSource;
+  const missionHandlers = {
+    completeCurrentStep: jest.fn(),
+    recordFailedAttempt: jest.fn().mockResolvedValue({
+      mission: { ...mission, strikeCount: 1 },
+      currentStep,
+      missionFinished: false,
+    }),
+    transitionCurrentStepToInProgress: jest.fn().mockResolvedValue(currentStep),
+    ...input.missionHandlers,
+  };
+  const executionQueue = [...input.executions];
+  const executionsService: jest.Mocked<Pick<ExecutionsService, 'executeTurnCode'>> = {
+    executeTurnCode: jest.fn().mockImplementation(async () => {
+      const next = executionQueue.shift();
+
+      if (!next) {
+        throw new Error('No more mocked executions');
+      }
+
+      return {
+        id: `execution-${executionQueue.length}`,
+        ...next,
+      } as ExecutionEntity;
+    }),
+  };
+  const missionResultsService: jest.Mocked<
+    Pick<MissionResultsService, 'createMissionResult'>
+  > = {
+    createMissionResult: jest.fn().mockResolvedValue({} as never),
+  };
+  const turnsService = new TurnsService(
+    { get: jest.fn().mockReturnValue(10000) } as unknown as ConfigService,
+    dataSource,
+    missionHandlers as unknown as GameRoomMissionsService,
+    executionsService as unknown as ExecutionsService,
+    missionResultsService as unknown as MissionResultsService,
+  );
+  const publishedLifecycle: { current: TurnLifecycleResult | null } = { current: null };
+  const publishTurnLifecycleResult = jest.fn(async (result: TurnLifecycleResult) => {
+    publishedLifecycle.current = result;
+  });
+  const submitService = new DefaultRealtimeTurnSubmitService(
+    turnsService,
+    { publishTurnLifecycleResult } as never,
+  );
+
+  return {
+    service: submitService,
+    turnsService,
+    missionResultsService,
+    missionHandlers,
+    publishTurnLifecycleResult,
+    get lifecycle() {
+      return publishedLifecycle.current;
+    },
+  };
+}
+
+async function submitCalculatorTurn(
+  submitService: DefaultRealtimeTurnSubmitService,
+  publishTurnLifecycleResult: jest.Mock,
+): Promise<TurnLifecycleResult> {
+  await submitService.submitTurn({
+    gameRoomId: 'room-1',
+    turnId: 'turn-1',
+    userId: 'user-1',
+    occurredAt: '2026-05-27T10:00:10+09:00',
+    files: [
+      {
+        gameRoomId: 'room-1',
+        turnId: 'turn-1',
+        userId: 'user-1',
+        filePath: 'main.py',
+        content: 'print("calculator")\n',
+        occurredAt: '2026-05-27T10:00:00+09:00',
+      },
+    ],
+  });
+
+  const lastCall =
+    publishTurnLifecycleResult.mock.calls[
+      publishTurnLifecycleResult.mock.calls.length - 1
+    ];
+  const lifecycle = lastCall?.[0] as TurnLifecycleResult | undefined;
+
+  if (!lifecycle) {
+    throw new Error('Expected turn lifecycle result to be published');
+  }
+
+  return lifecycle;
+}
+
+function createCalculatorScenarioMission(input: {
+  stepOrder?: number;
+  testCases?: Array<{
+    name: string;
+    stdinLines: string[];
+    expectedStdout: string;
+  }>;
+}): GameRoomMissionEntity {
+  const stepOrder = input.stepOrder ?? 1;
+  const testCases =
+    input.testCases ??
+    (stepOrder === 1
+      ? [
+          {
+            name: 'add_positive_integers',
+            stdinLines: ['2', '+', '3'],
+            expectedStdout: '5',
+          },
+          {
+            name: 'add_negative_integer',
+            stdinLines: ['10', '+', '-4'],
+            expectedStdout: '6',
+          },
+        ]
+      : []);
+
+  return {
+    ...createScenarioMission(),
+    containerId: 'container-1',
+    judgePolicyJson: {
+      judgeType: 'PUBLIC_TEST_CASES',
+      command: 'python /workspace/main.py',
+      steps: [{ stepOrder, testCases }],
+    },
+  } as unknown as GameRoomMissionEntity;
+}
+
+function createCalculatorScenarioCurrentStep(
+  stepOrder: number,
+): GameRoomMissionStepEntity {
+  return {
+    ...createScenarioCurrentStep(),
+    stepOrder,
+    missionTemplateStep: {
+      id: 'template-step-1',
+      targetFilePath: 'main.py',
+    },
+  } as GameRoomMissionStepEntity;
+}
 
 function createScenarioRoom(): GameRoomEntity {
   return {

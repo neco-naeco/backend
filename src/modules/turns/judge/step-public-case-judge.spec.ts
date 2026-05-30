@@ -180,11 +180,59 @@ describe('step-public-case-judge', () => {
         exitCode: 0,
         executionStatus: ExecutionStatus.SUCCESS,
         runtimeFailureCode: null,
+        runtimeFailureMessage: null,
         outcome: 'FAILED',
       }),
     ).toBe(
       '공개 테스트 "add_positive_integers" 실패: expected "5", actual "6"',
     );
+  });
+
+  it('uses runtimeFailureMessage, then stderr, then fallback for public-case ERROR messages', () => {
+    expect(
+      buildPublicCaseFailureMessage({
+        name: 'add_positive_integers',
+        stdinLines: ['2', '+', '3'],
+        expectedStdout: '5',
+        actualStdout: '',
+        stderr: '',
+        exitCode: null,
+        executionStatus: ExecutionStatus.FAILED,
+        runtimeFailureCode: 'RUNTIME_EXECUTION_FAILED',
+        runtimeFailureMessage: 'Container exec failed.',
+        outcome: 'ERROR',
+      }),
+    ).toBe('Container exec failed.');
+
+    expect(
+      buildPublicCaseFailureMessage({
+        name: 'add_positive_integers',
+        stdinLines: ['2', '+', '3'],
+        expectedStdout: '5',
+        actualStdout: '',
+        stderr: 'traceback: division by zero',
+        exitCode: 1,
+        executionStatus: ExecutionStatus.FAILED,
+        runtimeFailureCode: null,
+        runtimeFailureMessage: null,
+        outcome: 'ERROR',
+      }),
+    ).toBe('traceback: division by zero');
+
+    expect(
+      buildPublicCaseFailureMessage({
+        name: 'add_positive_integers',
+        stdinLines: ['2', '+', '3'],
+        expectedStdout: '5',
+        actualStdout: '',
+        stderr: '',
+        exitCode: null,
+        executionStatus: ExecutionStatus.FAILED,
+        runtimeFailureCode: 'RUNTIME_EXECUTION_FAILED',
+        runtimeFailureMessage: null,
+        outcome: 'ERROR',
+      }),
+    ).toBe('공개 테스트 "add_positive_integers" 런타임 오류');
   });
 
   it('runs all cases and aggregates the final judgeStatus', async () => {
@@ -254,6 +302,8 @@ describe('step-public-case-judge', () => {
     expect(outcome.judgeStatus).toBe(MissionResultJudgeStatus.ERROR);
     expect(outcome.caseResults).toHaveLength(2);
     expect(outcome.caseResults[0].outcome).toBe('ERROR');
+    expect(outcome.caseResults[0].runtimeFailureMessage).toBe('docker failed');
+    expect(buildPublicCaseFailureMessage(outcome.caseResults[0])).toBe('docker failed');
     expect(outcome.caseResults[1].outcome).toBe('PASSED');
     expect(outcome.representativeExecution.id).toBe('execution-error');
   });

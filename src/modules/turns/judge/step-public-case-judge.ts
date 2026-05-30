@@ -16,6 +16,7 @@ export interface PublicTestCaseJudgeDetail {
   exitCode: number | null;
   executionStatus: ExecutionStatus;
   runtimeFailureCode: string | null;
+  runtimeFailureMessage: string | null;
   outcome: PublicTestCaseOutcome;
 }
 
@@ -113,12 +114,33 @@ export function buildPublicCaseFailureMessage(
   caseResult: PublicTestCaseJudgeDetail,
 ): string {
   if (caseResult.outcome === 'ERROR') {
-    return `공개 테스트 "${caseResult.name}" 런타임 오류`;
+    return resolvePublicCaseErrorMessage(caseResult);
   }
 
   const actualStdout = caseResult.actualStdout.trim();
 
   return `공개 테스트 "${caseResult.name}" 실패: expected "${caseResult.expectedStdout}", actual "${actualStdout}"`;
+}
+
+export function resolvePublicCaseErrorMessage(
+  caseResult: Pick<
+    PublicTestCaseJudgeDetail,
+    'name' | 'stderr' | 'runtimeFailureMessage'
+  >,
+): string {
+  const runtimeFailureMessage = caseResult.runtimeFailureMessage?.trim();
+
+  if (runtimeFailureMessage) {
+    return runtimeFailureMessage;
+  }
+
+  const stderr = caseResult.stderr?.trim();
+
+  if (stderr) {
+    return stderr;
+  }
+
+  return `공개 테스트 "${caseResult.name}" 런타임 오류`;
 }
 
 export function resolveFirstFailedPublicCase(
@@ -157,6 +179,7 @@ export async function runStepPublicCaseJudging(
       exitCode: execution.exitCode,
       executionStatus: execution.status,
       runtimeFailureCode: execution.runtimeFailureCode,
+      runtimeFailureMessage: execution.runtimeFailureMessage,
       outcome,
     });
     outcomes.push(outcome);

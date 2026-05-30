@@ -14,6 +14,7 @@ import { GameRoomMissionEntity } from '@modules/game-room-missions/entity/game-r
 import { GameRoomMissionsService } from '@modules/game-room-missions/service/game-room-missions.service';
 import { GameRoomParticipantEntity } from '@modules/game-room-participants/entity/game-room-participant.entity';
 import { GameRoomEntity } from '@modules/game-rooms/entity/game-room.entity';
+import { buildTurnEvaluationResultPayload } from '@modules/mission-results/build-turn-evaluation-result-payload';
 import { MissionResultsService } from '@modules/mission-results/service/mission-results.service';
 import {
   ExecutionStatus,
@@ -32,8 +33,6 @@ import type {
   TurnSubmitEvent,
 } from '@modules/realtime/service/realtime.interfaces';
 import {
-  buildPublicCaseFailureMessage,
-  resolveFirstFailedPublicCase,
   resolveStepPublicTestCases,
   runStepPublicCaseJudging,
   type PublicTestCaseJudgeDetail,
@@ -385,6 +384,7 @@ export class TurnsService {
     const missionRepository = input.manager.getRepository(GameRoomMissionEntity);
 
     const judgeStatus = input.judgeStatus;
+    const judgedStep = input.currentStep;
     let room = input.room;
     let mission = input.mission;
     let currentStep: GameRoomMissionStepEntity | null = input.currentStep;
@@ -442,14 +442,14 @@ export class TurnsService {
       strikeCount = mission.strikeCount;
     }
 
-    const missionResultPayload = buildMissionResultPayload({
+    const missionResultPayload = buildTurnEvaluationResultPayload({
       judgeStatus,
       execution: input.execution,
       publicCaseResults: input.publicCaseResults,
       room,
       mission,
       turn: input.turn,
-      currentStep,
+      currentStep: judgedStep,
       strikeCount,
       missionFinished,
     });
@@ -704,91 +704,6 @@ function buildLifecycleEvents(input: {
             occurredAt,
           },
   };
-}
-
-function buildMissionResultPayload(input: {
-  judgeStatus: MissionResultJudgeStatus;
-  execution: ExecutionEntity;
-  publicCaseResults: PublicTestCaseJudgeDetail[] | null;
-  room: GameRoomEntity;
-  mission: GameRoomMissionEntity;
-  turn: TurnEntity;
-  currentStep: GameRoomMissionStepEntity | null;
-  strikeCount: number;
-  missionFinished: boolean;
-}): Record<string, unknown> {
-  const isStepCleared = input.judgeStatus === MissionResultJudgeStatus.PASSED;
-  const feedbackMessage =
-    input.judgeStatus === MissionResultJudgeStatus.PASSED
-      ? '현재 미션 단계를 통과했습니다.'
-      : input.judgeStatus === MissionResultJudgeStatus.FAILED
-        ? '현재 미션 단계를 통과하지 못했습니다.'
-        : '런타임 또는 판정 처리 오류가 발생했습니다.';
-
-  return {
-    missionId: input.mission.id,
-    turnId: input.turn.id,
-    stepId: input.currentStep?.id ?? null,
-    isStepCleared,
-    isMissionCleared: isStepCleared && input.missionFinished,
-    judgeStatus: input.judgeStatus,
-    strikeCount: input.strikeCount,
-    remainingStrikeCount: Math.max(input.room.maxStrikeCount - input.strikeCount, 0),
-    feedbackMessage,
-    executionSummary: {
-      status: input.execution.status,
-      exitCode: input.execution.exitCode,
-      stdout: input.execution.stdout,
-      stderr: input.execution.stderr,
-      runtimeFailureCode: input.execution.runtimeFailureCode,
-      runtimeFailureMessage: input.execution.runtimeFailureMessage,
-    },
-    publicCaseResults: input.publicCaseResults,
-    detectedIssues:
-      input.judgeStatus === MissionResultJudgeStatus.PASSED
-        ? []
-        : [
-            {
-              issueType:
-                input.judgeStatus === MissionResultJudgeStatus.ERROR
-                  ? 'RUNTIME_ERROR'
-                  : 'EXECUTION_FAILED',
-              message: resolveDetectedIssueMessage({
-                judgeStatus: input.judgeStatus,
-                execution: input.execution,
-                publicCaseResults: input.publicCaseResults,
-              }),
-              filePath:
-                input.currentStep?.missionTemplateStep.targetFilePath ?? null,
-            },
-          ],
-  };
-}
-
-function resolveDetectedIssueMessage(input: {
-  judgeStatus: MissionResultJudgeStatus;
-  execution: ExecutionEntity;
-  publicCaseResults: PublicTestCaseJudgeDetail[] | null;
-}): string {
-  const runtimeFailureMessage = input.execution.runtimeFailureMessage?.trim();
-
-  if (runtimeFailureMessage) {
-    return runtimeFailureMessage;
-  }
-
-  const stderr = input.execution.stderr?.trim();
-
-  if (stderr) {
-    return stderr;
-  }
-
-  const firstFailedCase = resolveFirstFailedPublicCase(input.publicCaseResults);
-
-  if (firstFailedCase) {
-    return buildPublicCaseFailureMessage(firstFailedCase);
-  }
-
-  return '판정에 실패했습니다.';
 }
 
 function buildGameState(input: {
