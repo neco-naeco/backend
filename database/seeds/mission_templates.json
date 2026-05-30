@@ -1,0 +1,233 @@
+[
+  {
+    "id": "22222222-2222-4222-8222-222222222222",
+    "title": "표준 입력 계산기",
+    "description": "Python으로 표준 입력을 읽어 사칙연산 계산기를 단계별로 완성합니다.",
+    "language": "python",
+    "difficulty": "EASY",
+    "defaultTimeLimitSeconds": 300,
+    "defaultMaxStrikeCount": 3,
+    "dockerImageId": "11111111-1111-4111-8111-111111111111",
+    "successCriteria": "여섯 단계의 공개 테스트 케이스를 모두 통과하고, stdout에 정확히 한 줄의 결과 또는 지정된 오류 문자열을 출력합니다.",
+    "judgePolicyJson": {
+      "judgeType": "PUBLIC_TEST_CASES",
+      "language": "python",
+      "runtime": {
+        "entryFilePath": "main.py",
+        "command": "python /workspace/main.py",
+        "stdinMode": "lines",
+        "promptFree": true
+      },
+      "comparisonPolicy": {
+        "stdout": "trim-exact",
+        "stderr": "must-be-empty",
+        "exitCode": 0
+      },
+      "errorStrings": {
+        "unsupportedOperator": "ERROR: unsupported operator",
+        "divisionByZero": "ERROR: division by zero",
+        "invalidNumber": "ERROR: invalid number"
+      },
+      "steps": [
+        {
+          "stepOrder": 1,
+          "testCases": [
+            {
+              "name": "add_positive_integers",
+              "stdinLines": ["2", "+", "3"],
+              "expectedStdout": "5"
+            },
+            {
+              "name": "add_negative_integer",
+              "stdinLines": ["10", "+", "-4"],
+              "expectedStdout": "6"
+            }
+          ]
+        },
+        {
+          "stepOrder": 2,
+          "testCases": [
+            {
+              "name": "add_positive_integers",
+              "stdinLines": ["2", "+", "3"],
+              "expectedStdout": "5"
+            },
+            {
+              "name": "subtract_positive_integers",
+              "stdinLines": ["9", "-", "5"],
+              "expectedStdout": "4"
+            },
+            {
+              "name": "subtract_to_negative",
+              "stdinLines": ["3", "-", "8"],
+              "expectedStdout": "-5"
+            }
+          ]
+        },
+        {
+          "stepOrder": 3,
+          "testCases": [
+            {
+              "name": "add_positive_integers",
+              "stdinLines": ["2", "+", "3"],
+              "expectedStdout": "5"
+            },
+            {
+              "name": "subtract_positive_integers",
+              "stdinLines": ["9", "-", "5"],
+              "expectedStdout": "4"
+            },
+            {
+              "name": "multiply_positive_integers",
+              "stdinLines": ["7", "*", "6"],
+              "expectedStdout": "42"
+            },
+            {
+              "name": "multiply_by_zero",
+              "stdinLines": ["11", "*", "0"],
+              "expectedStdout": "0"
+            }
+          ]
+        },
+        {
+          "stepOrder": 4,
+          "testCases": [
+            {
+              "name": "add_positive_integers",
+              "stdinLines": ["2", "+", "3"],
+              "expectedStdout": "5"
+            },
+            {
+              "name": "subtract_positive_integers",
+              "stdinLines": ["9", "-", "5"],
+              "expectedStdout": "4"
+            },
+            {
+              "name": "multiply_positive_integers",
+              "stdinLines": ["7", "*", "6"],
+              "expectedStdout": "42"
+            },
+            {
+              "name": "divide_evenly",
+              "stdinLines": ["8", "/", "2"],
+              "expectedStdout": "4"
+            },
+            {
+              "name": "divide_decimal",
+              "stdinLines": ["7", "/", "2"],
+              "expectedStdout": "3.5"
+            }
+          ]
+        },
+        {
+          "stepOrder": 5,
+          "testCases": [
+            {
+              "name": "add_positive_integers",
+              "stdinLines": ["2", "+", "3"],
+              "expectedStdout": "5"
+            },
+            {
+              "name": "subtract_positive_integers",
+              "stdinLines": ["9", "-", "5"],
+              "expectedStdout": "4"
+            },
+            {
+              "name": "multiply_positive_integers",
+              "stdinLines": ["7", "*", "6"],
+              "expectedStdout": "42"
+            },
+            {
+              "name": "divide_decimal",
+              "stdinLines": ["7", "/", "2"],
+              "expectedStdout": "3.5"
+            },
+            {
+              "name": "divide_evenly",
+              "stdinLines": ["8", "/", "2"],
+              "expectedStdout": "4"
+            },
+            {
+              "name": "division_by_zero",
+              "stdinLines": ["8", "/", "0"],
+              "expectedStdout": "ERROR: division by zero"
+            },
+            {
+              "name": "unsupported_operator",
+              "stdinLines": ["8", "%", "3"],
+              "expectedStdout": "ERROR: unsupported operator"
+            }
+          ]
+        },
+        {
+          "stepOrder": 6,
+          "testCases": [
+            {
+              "name": "add_positive_integers",
+              "stdinLines": ["2", "+", "3"],
+              "expectedStdout": "5"
+            },
+            {
+              "name": "subtract_positive_integers",
+              "stdinLines": ["9", "-", "5"],
+              "expectedStdout": "4"
+            },
+            {
+              "name": "multiply_positive_integers",
+              "stdinLines": ["7", "*", "6"],
+              "expectedStdout": "42"
+            },
+            {
+              "name": "divide_decimal",
+              "stdinLines": ["7", "/", "2"],
+              "expectedStdout": "3.5"
+            },
+            {
+              "name": "divide_evenly",
+              "stdinLines": ["8", "/", "2"],
+              "expectedStdout": "4"
+            },
+            {
+              "name": "division_by_zero",
+              "stdinLines": ["8", "/", "0"],
+              "expectedStdout": "ERROR: division by zero"
+            },
+            {
+              "name": "unsupported_operator",
+              "stdinLines": ["8", "%", "3"],
+              "expectedStdout": "ERROR: unsupported operator"
+            },
+            {
+              "name": "invalid_left_number",
+              "stdinLines": ["abc", "+", "3"],
+              "expectedStdout": "ERROR: invalid number"
+            },
+            {
+              "name": "invalid_right_number",
+              "stdinLines": ["9", "-", "xyz"],
+              "expectedStdout": "ERROR: invalid number"
+            }
+          ]
+        }
+      ]
+    },
+    "projectStructureJson": {
+      "rootPath": "/workspace",
+      "entryFilePath": "main.py",
+      "files": [
+        {
+          "filePath": "main.py",
+          "language": "python",
+          "readonly": false,
+          "content": "def main():\n    # Read three stdin lines: left number, operator, right number.\n    pass\n\n\nif __name__ == \"__main__\":\n    main()\n"
+        },
+        {
+          "filePath": "README.md",
+          "language": "markdown",
+          "readonly": true,
+          "content": "# 표준 입력 계산기\n\n표준 입력은 세 줄입니다.\n\n1. 왼쪽 숫자\n2. 연산자 (`+`, `-`, `*`, `/`)\n3. 오른쪽 숫자\n\n프롬프트를 출력하지 말고 결과 또는 지정된 오류 문자열만 한 줄로 출력하세요.\n"
+        }
+      ]
+    }
+  }
+]

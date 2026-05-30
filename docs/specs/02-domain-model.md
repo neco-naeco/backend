@@ -2,6 +2,15 @@
 
 ## Core Entities
 
+## Terminology Clarifications
+
+- **Mission Template**: A reusable mission definition chosen before a game starts. It defines the intended challenge, initial project structure, machine-readable judge policy, and the ordered steps that later become a live room mission.
+- **Room Mission**: The live mission instance created for exactly one game room from one mission template. It carries room-specific progress state such as current step, strike count, and final outcome.
+- **Room Settings**: The per-room gameplay configuration chosen for one game session, including participant bounds, turn time limit, and strike limit. It belongs to the game room, not to the mission template.
+- **Strike Count**: The accumulated number of failed step judgments within one room mission. It increases on failure and the room mission fails when it reaches the configured maximum.
+- **Docker Image**: The reusable runtime image definition referenced by one or more mission templates. It identifies the execution environment independently from any one room mission.
+- **Judge Policy**: The machine-readable judgment contract attached to a mission template. It defines how submitted code is executed and how the current step is evaluated from the execution result.
+
 ### User
 
 Represents a system user. Owns signup, login, room creation, participation, turn execution, and AI chat session initiation.
@@ -23,7 +32,7 @@ Stores login-session continuation state. The raw refresh token must not be store
 
 ### GameRoom
 
-The top-level container of one game session. It has an owner, difficulty, time limit, strike limit, and participant count bounds.
+The top-level container of one game session. It owns the room settings for that session: owner, difficulty, time limit, strike limit, and participant count bounds.
 
 Status set:
 
@@ -66,7 +75,7 @@ State owners:
 
 ### MissionTemplate
 
-The reusable mission definition chosen before the game starts.
+The reusable mission definition chosen before the game starts. It defines the challenge itself, while room settings such as participant bounds and turn time limit remain properties of the game room.
 
 Important fields:
 
@@ -76,11 +85,11 @@ Important fields:
 
 ### MissionTemplateStep
 
-Defines an ordered step within a mission template, including target file, success criteria, and hint text.
+Defines an ordered step within a mission template, including target file, success criteria, and hint text. These ordered steps later become room-specific step-progress records inside one room mission.
 
 ### GameRoomMission
 
-Represents the live mission instance inside one room. It tracks the selected template, current step, runtime container, strike count, and lifecycle timestamps.
+Represents the live mission instance inside one room. It is created from exactly one mission template and tracks the selected template, current step, runtime container, strike count, and lifecycle timestamps.
 
 ### GameRoomMissionStep
 
@@ -158,6 +167,8 @@ This domain provides assistive information only. It does not own authoritative s
 - `DockerImage`: execution image metadata
 - `DockerImageDeployment`: deployment history of runtime images
 
+The mission template references one `DockerImage`, while the room mission later holds the live runtime container identifier derived from that image.
+
 ## Domain Invariants
 
 - Only the server may apply authoritative room, turn, mission, and result transitions.
@@ -166,3 +177,4 @@ This domain provides assistive information only. It does not own authoritative s
 - AI may interpret, explain, and assist, but it may not decide final state.
 - Room membership and room ownership must be checked in service-layer authorization.
 - One user may not belong to more than one `WAITING` room at the same time.
+- Runtime execution only executes submitted code; the server reads the judge policy and decides pass or fail for the current step.

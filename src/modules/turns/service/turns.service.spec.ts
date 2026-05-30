@@ -683,6 +683,671 @@ describe('TurnsService', () => {
       }),
     );
   });
+
+  it('judges calculator public cases for the current step and passes when all match', async () => {
+    const room = createRoom();
+    const mission = createCalculatorMission();
+    const currentStep = createCurrentStep();
+    const turn = createTurn();
+    const participants = createParticipants();
+    const snapshots: TurnSnapshotEntity[] = [];
+    const turns = [turn];
+    const manager = createManager({
+      room,
+      mission,
+      currentStep,
+      turns,
+      participants,
+      snapshots,
+    });
+    const dataSource = {
+      transaction: jest.fn(async (callback: (manager: EntityManager) => unknown) =>
+        callback(manager as unknown as EntityManager),
+      ),
+    } as unknown as DataSource;
+    const gameRoomMissionsService: jest.Mocked<
+      Pick<
+        GameRoomMissionsService,
+        'completeCurrentStep' | 'recordFailedAttempt' | 'transitionCurrentStepToInProgress'
+      >
+    > = {
+      completeCurrentStep: jest.fn().mockResolvedValue({
+        mission: {
+          ...mission,
+          currentStepId: 'step-2',
+        },
+        nextStep: {
+          ...currentStep,
+          id: 'step-2',
+          stepOrder: 2,
+        },
+        missionFinished: false,
+      }),
+      recordFailedAttempt: jest.fn(),
+      transitionCurrentStepToInProgress: jest.fn().mockResolvedValue(currentStep),
+    };
+    const executionsService: jest.Mocked<Pick<ExecutionsService, 'executeTurnCode'>> = {
+      executeTurnCode: jest
+        .fn()
+        .mockResolvedValueOnce({
+          id: 'execution-1',
+          status: ExecutionStatus.SUCCESS,
+          exitCode: 0,
+          stdout: '5',
+          stderr: '',
+          runtimeFailureCode: null,
+          runtimeFailureMessage: null,
+        } as ExecutionEntity)
+        .mockResolvedValueOnce({
+          id: 'execution-2',
+          status: ExecutionStatus.SUCCESS,
+          exitCode: 0,
+          stdout: '6',
+          stderr: '',
+          runtimeFailureCode: null,
+          runtimeFailureMessage: null,
+        } as ExecutionEntity),
+    };
+    const missionResultsService: jest.Mocked<
+      Pick<MissionResultsService, 'createMissionResult'>
+    > = {
+      createMissionResult: jest.fn().mockResolvedValue({} as never),
+    };
+    const service = new TurnsService(
+      {
+        get: jest.fn().mockReturnValue(10000),
+      } as unknown as ConfigService,
+      dataSource,
+      gameRoomMissionsService as unknown as GameRoomMissionsService,
+      executionsService as unknown as ExecutionsService,
+      missionResultsService as unknown as MissionResultsService,
+    );
+
+    await service.submitTurn({
+      gameRoomId: room.id,
+      turnId: turn.id,
+      userId: turn.playerUserId,
+      occurredAt: '2026-05-26T10:00:10+09:00',
+      files: [
+        {
+          gameRoomId: room.id,
+          turnId: turn.id,
+          userId: turn.playerUserId,
+          filePath: 'main.py',
+          content: 'print("calculator")\n',
+          occurredAt: '2026-05-26T10:00:00+09:00',
+        },
+      ],
+    });
+
+    expect(executionsService.executeTurnCode).toHaveBeenCalledTimes(2);
+    expect(executionsService.executeTurnCode).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        stdinLines: ['2', '+', '3'],
+        containerId: mission.containerId,
+      }),
+    );
+    expect(executionsService.executeTurnCode).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        stdinLines: ['10', '+', '-4'],
+      }),
+    );
+    expect(missionResultsService.createMissionResult).toHaveBeenCalledWith(
+      expect.objectContaining({
+        judgeStatus: MissionResultJudgeStatus.PASSED,
+        resultPayloadJson: expect.objectContaining({
+          publicCaseResults: expect.arrayContaining([
+            expect.objectContaining({
+              name: 'add_positive_integers',
+              outcome: 'PASSED',
+            }),
+            expect.objectContaining({
+              name: 'add_negative_integer',
+              outcome: 'PASSED',
+            }),
+          ]),
+        }),
+      }),
+    );
+  });
+
+  it('marks calculator step as failed when stdout does not match expectedStdout', async () => {
+    const room = createRoom();
+    const mission = createCalculatorMission();
+    const currentStep = createCurrentStep();
+    const turn = createTurn();
+    const manager = createManager({
+      room,
+      mission,
+      currentStep,
+      turns: [turn],
+      participants: createParticipants(),
+      snapshots: [],
+    });
+    const dataSource = {
+      transaction: jest.fn(async (callback: (manager: EntityManager) => unknown) =>
+        callback(manager as unknown as EntityManager),
+      ),
+    } as unknown as DataSource;
+    const gameRoomMissionsService: jest.Mocked<
+      Pick<
+        GameRoomMissionsService,
+        'recordFailedAttempt' | 'transitionCurrentStepToInProgress'
+      >
+    > = {
+      recordFailedAttempt: jest.fn().mockResolvedValue({
+        mission: {
+          ...mission,
+          strikeCount: 1,
+        },
+        currentStep,
+        missionFinished: false,
+      }),
+      transitionCurrentStepToInProgress: jest.fn().mockResolvedValue(currentStep),
+    };
+    const executionsService: jest.Mocked<Pick<ExecutionsService, 'executeTurnCode'>> = {
+      executeTurnCode: jest.fn().mockResolvedValue({
+        id: 'execution-1',
+        status: ExecutionStatus.SUCCESS,
+        exitCode: 0,
+        stdout: '6',
+        stderr: '',
+        runtimeFailureCode: null,
+        runtimeFailureMessage: null,
+      } as ExecutionEntity),
+    };
+    const missionResultsService: jest.Mocked<
+      Pick<MissionResultsService, 'createMissionResult'>
+    > = {
+      createMissionResult: jest.fn().mockResolvedValue({} as never),
+    };
+    const service = new TurnsService(
+      {
+        get: jest.fn().mockReturnValue(10000),
+      } as unknown as ConfigService,
+      dataSource,
+      gameRoomMissionsService as unknown as GameRoomMissionsService,
+      executionsService as unknown as ExecutionsService,
+      missionResultsService as unknown as MissionResultsService,
+    );
+
+    const result = await service.submitTurn({
+      gameRoomId: room.id,
+      turnId: turn.id,
+      userId: turn.playerUserId,
+      occurredAt: '2026-05-26T10:00:10+09:00',
+      files: [
+        {
+          gameRoomId: room.id,
+          turnId: turn.id,
+          userId: turn.playerUserId,
+          filePath: 'main.py',
+          content: 'print("wrong")\n',
+          occurredAt: '2026-05-26T10:00:00+09:00',
+        },
+      ],
+    });
+
+    expect(executionsService.executeTurnCode).toHaveBeenCalledTimes(2);
+    expect(gameRoomMissionsService.recordFailedAttempt).toHaveBeenCalledWith(
+      expect.objectContaining({
+        gameRoomMissionId: mission.id,
+        strikeLimit: room.maxStrikeCount,
+      }),
+    );
+    expect(result.turnChangedEvent).not.toBeNull();
+    expect(result.missionResultEvent).toBeNull();
+    expect(missionResultsService.createMissionResult).toHaveBeenCalledWith(
+      expect.objectContaining({
+        judgeStatus: MissionResultJudgeStatus.FAILED,
+        resultPayloadJson: expect.objectContaining({
+          strikeCount: 1,
+          stepOrder: 1,
+          stepJudgingSummary: {
+            totalCases: 2,
+            passedCount: 1,
+            failedCount: 1,
+            errorCount: 0,
+          },
+          publicCaseResults: expect.arrayContaining([
+            expect.objectContaining({
+              name: 'add_positive_integers',
+              expectedStdout: '5',
+              actualStdout: '6',
+              outcome: 'FAILED',
+            }),
+          ]),
+          detectedIssues: [
+            expect.objectContaining({
+              issueType: 'PUBLIC_TEST_CASE_FAILED',
+              caseName: 'add_positive_integers',
+              message:
+                '공개 테스트 "add_positive_integers" 실패: expected "5", actual "6"',
+            }),
+          ],
+        }),
+      }),
+    );
+  });
+
+  it('finishes calculator mission and emits mission-result when strike limit is reached', async () => {
+    const room = createRoom();
+    room.maxStrikeCount = 1;
+    const mission = createCalculatorMission();
+    const currentStep = createCurrentStep();
+    const turn = createTurn();
+    const manager = createManager({
+      room,
+      mission,
+      currentStep,
+      turns: [turn],
+      participants: createParticipants(),
+      snapshots: [],
+    });
+    const dataSource = {
+      transaction: jest.fn(async (callback: (manager: EntityManager) => unknown) =>
+        callback(manager as unknown as EntityManager),
+      ),
+    } as unknown as DataSource;
+    const gameRoomMissionsService: jest.Mocked<
+      Pick<GameRoomMissionsService, 'recordFailedAttempt'>
+    > = {
+      recordFailedAttempt: jest.fn().mockResolvedValue({
+        mission: {
+          ...mission,
+          strikeCount: 1,
+          currentStepId: null,
+          finishedAt: new Date('2026-05-26T01:00:10.000Z'),
+        },
+        currentStep: {
+          ...currentStep,
+          status: GameRoomMissionStepStatus.FAILED,
+        },
+        missionFinished: true,
+      }),
+    };
+    const executionsService: jest.Mocked<Pick<ExecutionsService, 'executeTurnCode'>> = {
+      executeTurnCode: jest.fn().mockResolvedValue({
+        id: 'execution-1',
+        status: ExecutionStatus.SUCCESS,
+        exitCode: 0,
+        stdout: 'wrong',
+        stderr: '',
+        runtimeFailureCode: null,
+        runtimeFailureMessage: null,
+      } as ExecutionEntity),
+    };
+    const missionResultsService: jest.Mocked<
+      Pick<MissionResultsService, 'createMissionResult'>
+    > = {
+      createMissionResult: jest.fn().mockResolvedValue({} as never),
+    };
+    const service = new TurnsService(
+      {
+        get: jest.fn().mockReturnValue(10000),
+      } as unknown as ConfigService,
+      dataSource,
+      gameRoomMissionsService as unknown as GameRoomMissionsService,
+      executionsService as unknown as ExecutionsService,
+      missionResultsService as unknown as MissionResultsService,
+    );
+
+    const result = await service.submitTurn({
+      gameRoomId: room.id,
+      turnId: turn.id,
+      userId: turn.playerUserId,
+      occurredAt: '2026-05-26T10:00:10+09:00',
+      files: [
+        {
+          gameRoomId: room.id,
+          turnId: turn.id,
+          userId: turn.playerUserId,
+          filePath: 'main.py',
+          content: 'print("wrong")\n',
+          occurredAt: '2026-05-26T10:00:00+09:00',
+        },
+      ],
+    });
+
+    expect(gameRoomMissionsService.recordFailedAttempt).toHaveBeenCalled();
+    expect(result.turnChangedEvent).toBeNull();
+    expect(result.missionResultEvent).toMatchObject({
+      missionResult: expect.objectContaining({
+        judgeStatus: MissionResultJudgeStatus.FAILED,
+        strikeCount: 1,
+        stepJudgingSummary: expect.objectContaining({
+          failedCount: 2,
+        }),
+        isMissionCleared: false,
+      }),
+    });
+    expect(result.gameStateUpdatedEvent.gameState).toMatchObject({
+      status: GameRoomStatus.FINISHED,
+    });
+  });
+
+  it('records runtime ERROR for calculator public cases without incrementing strike', async () => {
+    const room = createRoom();
+    const mission = createCalculatorMission();
+    const currentStep = createCurrentStep();
+    const turn = createTurn();
+    const manager = createManager({
+      room,
+      mission,
+      currentStep,
+      turns: [turn],
+      participants: createParticipants(),
+      snapshots: [],
+    });
+    const dataSource = {
+      transaction: jest.fn(async (callback: (manager: EntityManager) => unknown) =>
+        callback(manager as unknown as EntityManager),
+      ),
+    } as unknown as DataSource;
+    const gameRoomMissionsService: jest.Mocked<
+      Pick<
+        GameRoomMissionsService,
+        'completeCurrentStep' | 'recordFailedAttempt' | 'transitionCurrentStepToInProgress'
+      >
+    > = {
+      completeCurrentStep: jest.fn(),
+      recordFailedAttempt: jest.fn(),
+      transitionCurrentStepToInProgress: jest.fn(),
+    };
+    const executionsService: jest.Mocked<Pick<ExecutionsService, 'executeTurnCode'>> = {
+      executeTurnCode: jest
+        .fn()
+        .mockResolvedValueOnce({
+          id: 'execution-1',
+          status: ExecutionStatus.FAILED,
+          exitCode: null,
+          stdout: '',
+          stderr: '',
+          runtimeFailureCode: 'RUNTIME_EXECUTION_FAILED',
+          runtimeFailureMessage: 'Container exec failed.',
+        } as ExecutionEntity)
+        .mockResolvedValueOnce({
+          id: 'execution-2',
+          status: ExecutionStatus.SUCCESS,
+          exitCode: 0,
+          stdout: '6',
+          stderr: '',
+          runtimeFailureCode: null,
+          runtimeFailureMessage: null,
+        } as ExecutionEntity),
+    };
+    const missionResultsService: jest.Mocked<
+      Pick<MissionResultsService, 'createMissionResult'>
+    > = {
+      createMissionResult: jest.fn().mockResolvedValue({} as never),
+    };
+    const service = new TurnsService(
+      {
+        get: jest.fn().mockReturnValue(10000),
+      } as unknown as ConfigService,
+      dataSource,
+      gameRoomMissionsService as unknown as GameRoomMissionsService,
+      executionsService as unknown as ExecutionsService,
+      missionResultsService as unknown as MissionResultsService,
+    );
+
+    const result = await service.submitTurn({
+      gameRoomId: room.id,
+      turnId: turn.id,
+      userId: turn.playerUserId,
+      occurredAt: '2026-05-26T10:00:10+09:00',
+      files: [
+        {
+          gameRoomId: room.id,
+          turnId: turn.id,
+          userId: turn.playerUserId,
+          filePath: 'main.py',
+          content: 'print("broken")\n',
+          occurredAt: '2026-05-26T10:00:00+09:00',
+        },
+      ],
+    });
+
+    expect(gameRoomMissionsService.recordFailedAttempt).not.toHaveBeenCalled();
+    expect(result.turnChangedEvent).toBeNull();
+    expect(missionResultsService.createMissionResult).toHaveBeenCalledWith(
+      expect.objectContaining({
+        judgeStatus: MissionResultJudgeStatus.ERROR,
+        resultPayloadJson: expect.objectContaining({
+          stepJudgingSummary: {
+            totalCases: 2,
+            passedCount: 1,
+            failedCount: 0,
+            errorCount: 1,
+          },
+          detectedIssues: [
+            expect.objectContaining({
+              issueType: 'RUNTIME_ERROR',
+              caseName: 'add_positive_integers',
+              message: 'Container exec failed.',
+            }),
+          ],
+        }),
+      }),
+    );
+  });
+
+  it('accepts divide-by-zero and invalid-number calculator contracts', async () => {
+    const room = createRoom();
+    const mission = createCalculatorMission({
+      stepOrder: 6,
+      testCases: [
+        {
+          name: 'division_by_zero',
+          stdinLines: ['8', '/', '0'],
+          expectedStdout: 'ERROR: division by zero',
+        },
+        {
+          name: 'invalid_left_number',
+          stdinLines: ['abc', '+', '3'],
+          expectedStdout: 'ERROR: invalid number',
+        },
+      ],
+    });
+    const currentStep = {
+      ...createCurrentStep(),
+      stepOrder: 6,
+    };
+    const turn = createTurn();
+    const manager = createManager({
+      room,
+      mission,
+      currentStep,
+      turns: [turn],
+      participants: createParticipants(),
+      snapshots: [],
+    });
+    const dataSource = {
+      transaction: jest.fn(async (callback: (manager: EntityManager) => unknown) =>
+        callback(manager as unknown as EntityManager),
+      ),
+    } as unknown as DataSource;
+    const gameRoomMissionsService: jest.Mocked<
+      Pick<
+        GameRoomMissionsService,
+        'completeCurrentStep' | 'transitionCurrentStepToInProgress'
+      >
+    > = {
+      completeCurrentStep: jest.fn().mockResolvedValue({
+        mission,
+        nextStep: currentStep,
+        missionFinished: false,
+      }),
+      transitionCurrentStepToInProgress: jest.fn().mockResolvedValue(currentStep),
+    };
+    const executionsService: jest.Mocked<Pick<ExecutionsService, 'executeTurnCode'>> = {
+      executeTurnCode: jest
+        .fn()
+        .mockResolvedValueOnce({
+          id: 'execution-div-zero',
+          status: ExecutionStatus.SUCCESS,
+          exitCode: 0,
+          stdout: 'ERROR: division by zero',
+          stderr: '',
+          runtimeFailureCode: null,
+          runtimeFailureMessage: null,
+        } as ExecutionEntity)
+        .mockResolvedValueOnce({
+          id: 'execution-invalid-number',
+          status: ExecutionStatus.SUCCESS,
+          exitCode: 0,
+          stdout: 'ERROR: invalid number',
+          stderr: '',
+          runtimeFailureCode: null,
+          runtimeFailureMessage: null,
+        } as ExecutionEntity),
+    };
+    const missionResultsService: jest.Mocked<
+      Pick<MissionResultsService, 'createMissionResult'>
+    > = {
+      createMissionResult: jest.fn().mockResolvedValue({} as never),
+    };
+    const service = new TurnsService(
+      {
+        get: jest.fn().mockReturnValue(10000),
+      } as unknown as ConfigService,
+      dataSource,
+      gameRoomMissionsService as unknown as GameRoomMissionsService,
+      executionsService as unknown as ExecutionsService,
+      missionResultsService as unknown as MissionResultsService,
+    );
+
+    await service.submitTurn({
+      gameRoomId: room.id,
+      turnId: turn.id,
+      userId: turn.playerUserId,
+      occurredAt: '2026-05-26T10:00:10+09:00',
+      files: [
+        {
+          gameRoomId: room.id,
+          turnId: turn.id,
+          userId: turn.playerUserId,
+          filePath: 'main.py',
+          content: 'print("contracts")\n',
+          occurredAt: '2026-05-26T10:00:00+09:00',
+        },
+      ],
+    });
+
+    expect(executionsService.executeTurnCode).toHaveBeenCalledTimes(2);
+    expect(missionResultsService.createMissionResult).toHaveBeenCalledWith(
+      expect.objectContaining({
+        judgeStatus: MissionResultJudgeStatus.PASSED,
+        resultPayloadJson: expect.objectContaining({
+          publicCaseResults: [
+            expect.objectContaining({
+              name: 'division_by_zero',
+              outcome: 'PASSED',
+            }),
+            expect.objectContaining({
+              name: 'invalid_left_number',
+              outcome: 'PASSED',
+            }),
+          ],
+        }),
+      }),
+    );
+  });
+
+  it('accepts calculator error strings for unsupported operators', async () => {
+    const room = createRoom();
+    const mission = createCalculatorMission({
+      stepOrder: 5,
+      testCases: [
+        {
+          name: 'unsupported_operator',
+          stdinLines: ['8', '%', '3'],
+          expectedStdout: 'ERROR: unsupported operator',
+        },
+      ],
+    });
+    const currentStep = {
+      ...createCurrentStep(),
+      stepOrder: 5,
+    };
+    const turn = createTurn();
+    const manager = createManager({
+      room,
+      mission,
+      currentStep,
+      turns: [turn],
+      participants: createParticipants(),
+      snapshots: [],
+    });
+    const dataSource = {
+      transaction: jest.fn(async (callback: (manager: EntityManager) => unknown) =>
+        callback(manager as unknown as EntityManager),
+      ),
+    } as unknown as DataSource;
+    const gameRoomMissionsService: jest.Mocked<
+      Pick<
+        GameRoomMissionsService,
+        'completeCurrentStep' | 'transitionCurrentStepToInProgress'
+      >
+    > = {
+      completeCurrentStep: jest.fn().mockResolvedValue({
+        mission,
+        nextStep: currentStep,
+        missionFinished: false,
+      }),
+      transitionCurrentStepToInProgress: jest.fn().mockResolvedValue(currentStep),
+    };
+    const executionsService: jest.Mocked<Pick<ExecutionsService, 'executeTurnCode'>> = {
+      executeTurnCode: jest.fn().mockResolvedValue({
+        id: 'execution-1',
+        status: ExecutionStatus.SUCCESS,
+        exitCode: 0,
+        stdout: 'ERROR: unsupported operator',
+        stderr: '',
+        runtimeFailureCode: null,
+        runtimeFailureMessage: null,
+      } as ExecutionEntity),
+    };
+    const missionResultsService: jest.Mocked<
+      Pick<MissionResultsService, 'createMissionResult'>
+    > = {
+      createMissionResult: jest.fn().mockResolvedValue({} as never),
+    };
+    const service = new TurnsService(
+      {
+        get: jest.fn().mockReturnValue(10000),
+      } as unknown as ConfigService,
+      dataSource,
+      gameRoomMissionsService as unknown as GameRoomMissionsService,
+      executionsService as unknown as ExecutionsService,
+      missionResultsService as unknown as MissionResultsService,
+    );
+
+    await service.submitTurn({
+      gameRoomId: room.id,
+      turnId: turn.id,
+      userId: turn.playerUserId,
+      occurredAt: '2026-05-26T10:00:10+09:00',
+      files: [
+        {
+          gameRoomId: room.id,
+          turnId: turn.id,
+          userId: turn.playerUserId,
+          filePath: 'main.py',
+          content: 'print("operator")\n',
+          occurredAt: '2026-05-26T10:00:00+09:00',
+        },
+      ],
+    });
+
+    expect(missionResultsService.createMissionResult).toHaveBeenCalledWith(
+      expect.objectContaining({
+        judgeStatus: MissionResultJudgeStatus.PASSED,
+      }),
+    );
+  });
 });
 
 function createRoom(): GameRoomEntity {
@@ -698,6 +1363,48 @@ function createRoom(): GameRoomEntity {
     createdAt: new Date(),
     updatedAt: new Date(),
   } as GameRoomEntity;
+}
+
+function createCalculatorMission(input?: {
+  stepOrder?: number;
+  testCases?: Array<{
+    name: string;
+    stdinLines: string[];
+    expectedStdout: string;
+  }>;
+}): GameRoomMissionEntity {
+  const stepOrder = input?.stepOrder ?? 1;
+  const testCases =
+    input?.testCases ??
+    (stepOrder === 1
+      ? [
+          {
+            name: 'add_positive_integers',
+            stdinLines: ['2', '+', '3'],
+            expectedStdout: '5',
+          },
+          {
+            name: 'add_negative_integer',
+            stdinLines: ['10', '+', '-4'],
+            expectedStdout: '6',
+          },
+        ]
+      : []);
+
+  return {
+    ...createMission(),
+    containerId: 'container-1',
+    judgePolicyJson: {
+      judgeType: 'PUBLIC_TEST_CASES',
+      command: 'python /workspace/main.py',
+      steps: [
+        {
+          stepOrder,
+          testCases,
+        },
+      ],
+    },
+  } as unknown as GameRoomMissionEntity;
 }
 
 function createMission(): GameRoomMissionEntity {
@@ -740,7 +1447,8 @@ function createCurrentStep(): GameRoomMissionStepEntity {
       missionTemplateId: 'template-1',
       stepOrder: 1,
       targetFilePath: 'main.py',
-      successCriteriaJson: {},
+      successCriteria: 'Print the expected calculator result.',
+      judgePolicyJson: {},
       hintText: 'hint',
     },
     createdAt: new Date(),

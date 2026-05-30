@@ -16,6 +16,12 @@ export interface ExecuteMissionCodeInput {
   content: string;
   command: string;
   timeoutMs?: number;
+  /** Console input lines joined with newlines for the executed process. */
+  stdinLines?: string[];
+}
+
+export function formatStdinFromLines(stdinLines: string[]): string {
+  return `${stdinLines.join('\n')}\n`;
 }
 
 export interface RuntimeExecutionCompletedResult {
@@ -46,10 +52,15 @@ export type RuntimeExecutionResult =
   | RuntimeExecutionTimeoutResult
   | RuntimeExecutionFailureResult;
 
+export interface RemoveMissionContainerInput {
+  containerId: string;
+}
+
 export interface RuntimeAdapter {
   prepareMissionContainer(
     input: PrepareMissionContainerInput,
   ): Promise<RuntimeContainerHandle>;
+  removeMissionContainer(input: RemoveMissionContainerInput): Promise<void>;
   executeMissionCode(
     input: ExecuteMissionCodeInput,
   ): Promise<RuntimeExecutionResult>;

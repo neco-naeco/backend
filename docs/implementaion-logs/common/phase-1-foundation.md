@@ -195,3 +195,154 @@
 - 타임스탬프 응답 직렬화는 반드시 `toSeoulIso(date)` 유틸 사용 (`@common/utils/date.util` 또는 `@common`).
 - 모든 HTTP 라우트는 `/v1` 프리픽스가 자동 적용됨 (`main.ts`의 `setGlobalPrefix('v1')`).
 - 마이그레이션 생성: `pnpm migration:generate -- database/migrations/<MigrationName>`.
+
+---
+
+## [2026-05-30] Task 1: Align schema and entities with calculator mission metadata
+
+**Plan reference:** `docs/plans/calculator-mission-template-runtime-judging-plan.md`
+
+**Summary:**
+- 계산기 미션 템플릿과 6단계 플로우를 저장할 수 있도록 미션 템플릿/스텝 엔티티와 스키마 메타데이터를 ERD 용어에 맞춰 보강했습니다.
+- `docker_images` 테이블을 TypeORM 엔티티로 모델링하고 `mission_templates.docker_image_id` 관계를 명시했습니다.
+
+**Dependencies reviewed before starting:**
+- `docs/plans/calculator-mission-template-runtime-judging-plan.md` — Task 1 acceptance criteria
+- `docs/specs/02-domain-model.md` — Mission Template, Mission Template Step, Docker Image 용어와 런타임 이미지 참조 규칙
+- `docs/specs/04-data-model.md` — snake_case 컬럼, jsonb payload, ERD 보존 규칙
+- `docs/etc/erd.md` — `mission_templates`, `mission_template_steps`, `docker_images` 필드 계약
+- `docs/implementaion-logs/common/phase-1-foundation.md` — C1/C2 로그와 미해결 질문 확인
+
+**Implementation details:**
+- `MissionTemplateEntity`에 `title`, `description`, `language`, `defaultTimeLimitSeconds`, `defaultMaxStrikeCount`, `successCriteria`를 추가했습니다.
+- `MissionTemplateEntity`가 `DockerImageEntity`를 `ManyToOne`으로 참조하도록 `docker_image_id` 관계를 명시했습니다.
+- `MissionTemplateStepEntity`에 `title`, `description`, human-readable `successCriteria`, ERD의 `judgePolicyJson`을 추가했습니다.
+- 기존 `success_criteria_json` 컬럼은 데이터 손실을 피하기 위해 삭제하지 않고 `select: false` legacy 컬럼으로 남겼습니다.
+- 보정 마이그레이션은 기존 테이블에 필요한 새 컬럼만 추가하고 rollback 시 추가 컬럼만 제거합니다.
+
+**Files changed:**
+- `src/modules/docker-images/entity/docker-image.entity.ts`
+- `src/modules/game-room-missions/entity/mission-template.entity.ts`
+- `src/modules/game-room-missions/entity/mission-template-step.entity.ts`
+- `database/migrations/1779780000000-AlignCalculatorMissionTemplateMetadata.ts`
+- `src/modules/game-room-missions/service/game-room-missions.service.spec.ts`
+- `src/modules/turns/service/turns.service.spec.ts`
+- `docs/implementaion-logs/common/phase-1-foundation.md`
+
+**Verification:**
+- [x] `pnpm test -- src/modules/game-room-missions/service/game-room-missions.service.spec.ts`
+- [x] `pnpm typecheck`
+- [x] `pnpm exec eslint src/modules/docker-images/entity/docker-image.entity.ts src/modules/game-room-missions/entity/mission-template.entity.ts src/modules/game-room-missions/entity/mission-template-step.entity.ts`
+- [x] GPT 5.4 subagent review — P1/P2 피드백 반영 후 재리뷰에서 remaining findings 없음
+- [x] Manual check: 엔티티와 마이그레이션 필드가 `docs/specs/02-domain-model.md`, `docs/specs/04-data-model.md`, `docs/etc/erd.md`의 명명과 관계에 맞는지 확인
+- [ ] Full `pnpm lint` — 기존 범위 밖 이슈로 실패: `src/modules/realtime/service/realtime-room-state.service.ts` unused import, `src/modules/turns/service/turns.service.ts` empty interface 및 unused helper
+
+**Commit:**
+- `83c0c45` feat(mission): 계산기 미션 메타데이터 스키마 추가
+
+**Impact on next tasks:**
+- Task 2는 `docker_images`, `mission_templates`, `mission_template_steps` seed를 새 메타데이터 필드에 맞춰 작성할 수 있습니다.
+- Task 3는 `mission_templates.docker_image_id`에서 `DockerImageEntity`를 통해 구체적인 runtime image metadata를 조회할 수 있습니다.
+
+**Design decisions made:**
+- `docker_image_deployments`는 이번 Task 1 acceptance에 없고 런타임 배포 이력은 계산기 MVP의 시드/실행 경로에 필요하지 않아 추가하지 않았습니다.
+- 기존 `success_criteria_json`은 ERD의 human-readable `success_criteria`와 별개로 보존했습니다. 삭제 마이그레이션은 기존 데이터 손실 가능성이 있어 이번 범위에서 제외했습니다.
+
+**Deviations from spec:**
+- `mission_template_steps.success_criteria_json` legacy 컬럼이 일시적으로 남아 있습니다. ERD의 신규 human-readable `success_criteria`와 `judge_policy_json`은 추가했으며, legacy 컬럼 제거 여부는 별도 데이터 마이그레이션 결정이 필요합니다.
+
+**Trade-offs:**
+- 기존 컬럼을 즉시 제거하면 ERD와 더 깨끗하게 맞지만 rollback과 기존 데이터 보존이 취약합니다. Task 1은 안전한 스키마 확장을 우선했습니다.
+
+**Open questions:**
+- [x] `docker_image_deployments`를 Task 1에 포함해야 하는가? → No. 계산기 MVP Task 1 acceptance는 `docker_images` persistence와 `mission_templates.docker_image_id` 관계까지만 요구합니다.
+- [ ] `mission_template_steps.success_criteria_json` legacy 컬럼을 언제 제거할 것인가? → 데이터 백필/호환성 정책을 정한 뒤 별도 마이그레이션으로 처리해야 합니다.
+
+**Open risks or follow-ups:**
+- Task 2 seed 작성 시 `mission_template_steps.judgePolicyJson`과 루트 `mission_templates.judgePolicyJson`의 책임 분리를 다시 확인해야 합니다. 현재 계획은 public test case bundle을 루트 judge policy에 둡니다.
+- Full lint는 기존 unrelated 이슈가 있어 통과하지 못했습니다.
+
+**Instructions for the next worker:**
+- Task 2 시작 시 이 로그와 `database/migrations/1779780000000-AlignCalculatorMissionTemplateMetadata.ts`를 먼저 읽을 것.
+- 계산기 seed에는 `mission_templates.title`, `description`, `language`, `successCriteria`, `defaultTimeLimitSeconds`, `defaultMaxStrikeCount`를 반드시 채울 것.
+- 스텝 seed에는 `title`, `description`, `successCriteria`, `targetFilePath`, `hintText`, `judgePolicyJson`을 반드시 채울 것.
+- `successCriteriaJson` legacy 컬럼에 새 seed 데이터를 의존시키지 말 것.
+
+---
+
+## [2026-05-30] Task 2: Add seed infrastructure and calculator mission seed data
+
+**Plan reference:** `docs/plans/calculator-mission-template-runtime-judging-plan.md`
+
+**Summary:**
+- 계산기 미션용 repository seed 파일 3개(`docker_images`, `mission_templates`, `mission_template_steps`)를 추가했습니다.
+- 애플리케이션 부트스트랩에서 도커 이미지, 미션 템플릿, 6개 미션 스텝을 트랜잭션으로 upsert하는 `MissionSeedService`를 추가했습니다.
+
+**Dependencies reviewed before starting:**
+- `docs/plans/calculator-mission-template-runtime-judging-plan.md` — Task 2 acceptance criteria
+- `docs/specs/00-overview.md` — source hierarchy and conflict policy
+- `docs/specs/02-domain-model.md` — Mission Template, Mission Template Step, Docker Image domain terms
+- `docs/specs/04-data-model.md` — snake_case persistence and jsonb payload rules
+- `docs/specs/06-gameplay-lifecycle.md` — game start and turn judgment flow context
+- `docs/specs/07-integrations-and-ai.md` — Docker runtime lifecycle and server authority boundary
+- `docs/implementaion-logs/README.md` — logging and task completion contract
+- `docs/implementaion-logs/common/phase-1-foundation.md` — Task 1 handoff and open question review
+
+**Implementation details:**
+- `database/seeds/docker_images.json`에 단일 Python runner image reference를 추가했습니다.
+- `database/seeds/mission_templates.json`에 Python-only, prompt-free stdin flow, `stdout.trim()` exact comparison, stderr empty, exit code 0 기준의 calculator judge policy를 추가했습니다.
+- `judgePolicyJson.steps[]`에는 step order별 public test case bundle을 두고, 후속 step이 이전 연산 회귀를 잡도록 cumulative case를 포함했습니다.
+- `projectStructureJson.files`에는 writable `main.py` skeleton과 read-only `README.md`를 포함했습니다.
+- `database/seeds/mission_template_steps.json`에는 6개 단계의 title, description, target file, success criteria, hint text, step judge policy reference를 추가했습니다.
+- `MissionSeedService`는 `docker_images` → `mission_templates` → `mission_template_steps` 순서로 한 트랜잭션 안에서 upsert합니다.
+- 재시드 시 기존 logical step(`missionTemplateId`, `stepOrder`)의 primary key를 바꾸지 않아 live `game_room_mission_steps` FK를 깨지 않도록 했습니다.
+- 미션 seed 실패는 필수 런타임 기준 데이터 누락이므로 로그 후 rethrow하여 bootstrap failure로 노출합니다.
+
+**Files changed:**
+- `database/seeds/docker_images.json`
+- `database/seeds/mission_templates.json`
+- `database/seeds/mission_template_steps.json`
+- `src/modules/game-room-missions/game-room-missions.module.ts`
+- `src/modules/game-room-missions/service/mission-seed.service.ts`
+- `src/modules/game-room-missions/service/mission-seed.service.spec.ts`
+
+**Verification:**
+- [x] `pnpm test -- src/modules/prompt-template/prompt-template-seed.service.spec.ts`
+- [x] `pnpm test -- src/modules/game-room-missions/service/game-room-missions.service.spec.ts src/modules/game-room-missions/service/mission-seed.service.spec.ts`
+- [x] `pnpm typecheck`
+- [x] `pnpm exec eslint src/modules/game-room-missions/service/mission-seed.service.ts src/modules/game-room-missions/game-room-missions.module.ts`
+- [x] Manual JSON parse and seed shape check: 1 docker image, 1 mission template, 6 steps, `main.py` writable, `README.md` read-only, exact calculator error strings present
+- [x] GPT 5.4 subagent review — initial findings on step PK rewrite, cumulative division case coverage, fail-fast bootstrap, and idempotence test coverage were fixed; re-review reported no blocking findings
+
+**Commit:**
+- `f87ada2` feat(mission): 계산기 미션 시드 추가
+
+**Impact on next tasks:**
+- Task 3 can resolve `mission_templates.docker_image_id` to the seeded Python runner image metadata.
+- Task 5 can read public per-step cases from `mission_templates.judge_policy_json.steps[]`.
+- Calculator mission startup now depends on seed import succeeding during application bootstrap.
+
+**Design decisions made:**
+- Mission seed bootstrap fails fast instead of swallowing seed errors. This differs from prompt-template cache seeding because calculator mission records are required runtime baseline data, not optional prompt cache refresh support.
+- Step seed upsert preserves existing logical row IDs when a row already exists for `(missionTemplateId, stepOrder)` to avoid breaking historical/live room mission step references.
+- Public test case bundles are stored at the mission template root and step records reference their bundle by `stepOrder`, matching the plan’s root `judgePolicyJson` direction while keeping step metadata human-readable.
+
+**Deviations from spec:**
+- None for Task 2. The Task 1 legacy `mission_template_steps.success_criteria_json` column remains outside this task’s scope and is populated with compatibility metadata by the seed service.
+
+**Trade-offs:**
+- Seed records use stable UUIDs committed in JSON rather than generated IDs. This keeps local, test, and future environment baselines deterministic.
+- The calculator cases intentionally stay small and public-only. Hidden tests or flexible grading were excluded to preserve the MVP scope and server-side deterministic judging contract.
+
+**Open questions:**
+- [x] Should mission seed bootstrap continue on import failure like prompt-template seeding? → No. Calculator mission data is required for runtime selection and judging, so fail-fast is safer.
+- [ ] When should legacy `mission_template_steps.success_criteria_json` be removed? → Still unresolved from Task 1; not required for Task 2.
+
+**Open risks or follow-ups:**
+- Task 3 must map the seeded `DockerImageEntity.imageUri` to runtime container preparation without hardcoding image strings elsewhere.
+- Task 5 must use `stdout.trim()` exact comparison and require empty stderr to preserve the seed’s comparison policy.
+
+**Instructions for the next worker:**
+- Read `database/seeds/mission_templates.json` before implementing runtime preparation or judging; it is now the canonical calculator mission contract.
+- Preserve `judgePolicyJson.steps[].testCases[].stdinLines` and `expectedStdout` shapes when wiring Task 5.
+- Do not rewrite existing `mission_template_steps.id` values during future seed updates; use logical step identity for updates.

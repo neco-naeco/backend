@@ -1,10 +1,17 @@
 import {
   ConflictException,
   ForbiddenException,
+  Inject,
   Injectable,
+  Logger,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
+import { RUNTIME_ADAPTER } from '@integrations/runtime/runtime.constants';
+import type { RuntimeAdapter } from '@integrations/runtime/runtime.interfaces';
 import { DataSource, EntityManager, Repository } from 'typeorm';
+import { DockerImageEntity } from '@modules/docker-images/entity/docker-image.entity';
 import { GameRoomParticipantEntity } from '@modules/game-room-participants/entity/game-room-participant.entity';
 import {
   GameRoomMissionStepStatus,
@@ -20,7 +27,6 @@ export interface CreateGameRoomMissionInput {
   gameRoomId: string;
   roomDifficulty: string;
   missionTemplateId: string;
-  runtimeContainerId?: string;
 }
 
 export interface CurrentMissionStepHint {
@@ -74,9 +80,29 @@ const ALLOWED_STEP_TRANSITIONS: Record<
   [GameRoomMissionStepStatus.FAILED]: [],
 };
 
+const RUNTIME_CONTAINER_PREPARATION_FAILED_MESSAGE =
+  'Failed to prepare the mission runtime container.';
+
 @Injectable()
 export class GameRoomMissionsService {
-  constructor(private readonly dataSource: DataSource) {}
+  private readonly logger = new Logger(GameRoomMissionsService.name);
+
+  constructor(
+    private readonly dataSource: DataSource,
+    @Inject(RUNTIME_ADAPTER)
+    private readonly runtimeAdapter: RuntimeAdapter,
+  ) {}
+
+  async releasePreparedRuntimeContainer(containerId: string): Promise<void> {
+    try {
+      await this.runtimeAdapter.removeMissionContainer({ containerId });
+    } catch (error) {
+      this.logger.warn(
+        `Failed to remove prepared runtime container ${containerId}`,
+        error instanceof Error ? error.stack : String(error),
+      );
+    }
+  }
 
   async validateMissionTemplateSelection(
     roomDifficulty: string,
@@ -90,6 +116,7 @@ export class GameRoomMissionsService {
 
     const missionTemplate = await missionTemplateRepository.findOne({
       where: { id: missionTemplateId },
+      relations: { dockerImage: true },
     });
 
     if (!missionTemplate) {
@@ -98,6 +125,8 @@ export class GameRoomMissionsService {
         message: 'Mission template was not found.',
       });
     }
+
+    this.ensureMissionTemplateDockerImage(missionTemplate.dockerImage);
 
     if (missionTemplate.difficulty !== roomDifficulty) {
       throw new ConflictException({
@@ -144,38 +173,56 @@ export class GameRoomMissionsService {
       order: { stepOrder: 'ASC' },
     });
 
-    const gameRoomMission = gameRoomMissionRepository.create({
-      gameRoomId: input.gameRoomId,
-      missionTemplateId: missionTemplate.id,
-      currentStepId: null,
-      containerId: input.runtimeContainerId ?? null,
-      strikeCount: 0,
-      judgePolicyJson: missionTemplate.judgePolicyJson,
-      projectStructureJson: missionTemplate.projectStructureJson,
-      startedAt: new Date(),
-      finishedAt: null,
-    });
+    const missionId = randomUUID();
+    let runtimeContainerId: string | null = null;
 
-    const savedGameRoomMission = await gameRoomMissionRepository.save(gameRoomMission);
-    const gameRoomMissionSteps = missionTemplateSteps.map((missionTemplateStep, index) =>
-      gameRoomMissionStepRepository.create({
-        gameRoomMissionId: savedGameRoomMission.id,
-        missionTemplateStepId: missionTemplateStep.id,
-        stepOrder: missionTemplateStep.stepOrder,
-        status:
-          index === 0
-            ? GameRoomMissionStepStatus.READY
-            : GameRoomMissionStepStatus.LOCKED,
-      }),
-    );
+    try {
+      runtimeContainerId = await this.prepareRuntimeContainer({
+        gameRoomId: input.gameRoomId,
+        missionId,
+        dockerImage: missionTemplate.dockerImage,
+      });
 
-    const savedGameRoomMissionSteps =
-      await gameRoomMissionStepRepository.save(gameRoomMissionSteps);
-    const firstStep = savedGameRoomMissionSteps[0];
+      const gameRoomMission = gameRoomMissionRepository.create({
+        id: missionId,
+        gameRoomId: input.gameRoomId,
+        missionTemplateId: missionTemplate.id,
+        currentStepId: null,
+        containerId: runtimeContainerId,
+        strikeCount: 0,
+        judgePolicyJson: missionTemplate.judgePolicyJson,
+        projectStructureJson: missionTemplate.projectStructureJson,
+        startedAt: new Date(),
+        finishedAt: null,
+      });
 
-    savedGameRoomMission.currentStepId = firstStep.id;
+      const savedGameRoomMission = await gameRoomMissionRepository.save(gameRoomMission);
+      const gameRoomMissionSteps = missionTemplateSteps.map((missionTemplateStep, index) =>
+        gameRoomMissionStepRepository.create({
+          gameRoomMissionId: savedGameRoomMission.id,
+          missionTemplateStepId: missionTemplateStep.id,
+          stepOrder: missionTemplateStep.stepOrder,
+          status:
+            index === 0
+              ? GameRoomMissionStepStatus.READY
+              : GameRoomMissionStepStatus.LOCKED,
+        }),
+      );
 
-    return gameRoomMissionRepository.save(savedGameRoomMission);
+      const savedGameRoomMissionSteps =
+        await gameRoomMissionStepRepository.save(gameRoomMissionSteps);
+      const firstStep = savedGameRoomMissionSteps[0];
+
+      savedGameRoomMission.currentStepId = firstStep.id;
+
+      return gameRoomMissionRepository.save(savedGameRoomMission);
+    } catch (error) {
+      if (runtimeContainerId) {
+        await this.releasePreparedRuntimeContainer(runtimeContainerId);
+      }
+
+      throw error;
+    }
   }
 
   async getCurrentStepHint(
@@ -343,6 +390,46 @@ export class GameRoomMissionsService {
     };
   }
 
+  private ensureMissionTemplateDockerImage(
+    dockerImage: DockerImageEntity | null | undefined,
+  ): void {
+    if (!dockerImage) {
+      throw new NotFoundException({
+        code: 'MISSION_TEMPLATE_DOCKER_IMAGE_NOT_FOUND',
+        message: 'Mission template docker image was not found.',
+      });
+    }
+  }
+
+  private async prepareRuntimeContainer(input: {
+    gameRoomId: string;
+    missionId: string;
+    dockerImage: DockerImageEntity;
+  }): Promise<string> {
+    const keepAliveCommand = resolveKeepAliveCommand(input.dockerImage.metadataJson);
+
+    try {
+      const runtimeContainer = await this.runtimeAdapter.prepareMissionContainer({
+        gameRoomId: input.gameRoomId,
+        missionId: input.missionId,
+        image: input.dockerImage.imageUri,
+        keepAliveCommand,
+      });
+
+      return runtimeContainer.containerId;
+    } catch (error) {
+      this.logger.error(
+        'Mission runtime container preparation failed',
+        error instanceof Error ? error.stack : String(error),
+      );
+
+      throw new ServiceUnavailableException({
+        code: 'RUNTIME_CONTAINER_PREPARATION_FAILED',
+        message: RUNTIME_CONTAINER_PREPARATION_FAILED_MESSAGE,
+      });
+    }
+  }
+
   private async ensureNoExistingMission(
     gameRoomMissionRepository: Repository<GameRoomMissionEntity>,
     gameRoomId: string,
@@ -440,4 +527,12 @@ export class GameRoomMissionsService {
       });
     }
   }
+}
+
+function resolveKeepAliveCommand(
+  metadataJson: Record<string, unknown> | null,
+): string | undefined {
+  const keepAliveCommand = metadataJson?.keepAliveCommand;
+
+  return typeof keepAliveCommand === 'string' ? keepAliveCommand : undefined;
 }

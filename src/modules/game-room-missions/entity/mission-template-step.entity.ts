@@ -18,10 +18,22 @@ export class MissionTemplateStepEntity extends BaseEntity {
   @Column({ type: 'integer', name: 'step_order' })
   stepOrder!: number;
 
+  @Column({ type: 'text' })
+  title!: string;
+
+  @Column({ type: 'text' })
+  description!: string;
+
   @Column({ type: 'text', name: 'target_file_path' })
   targetFilePath!: string;
 
-  @Column({ type: 'jsonb', name: 'success_criteria_json' })
+  @Column({ type: 'text', name: 'success_criteria' })
+  successCriteria!: string;
+
+  @Column({ type: 'jsonb', name: 'judge_policy_json' })
+  judgePolicyJson!: Record<string, unknown>;
+
+  @Column({ type: 'jsonb', name: 'success_criteria_json', select: false })
   successCriteriaJson!: Record<string, unknown>;
 
   @Column({ type: 'text', name: 'hint_text' })

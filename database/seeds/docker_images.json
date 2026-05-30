@@ -1,0 +1,21 @@
+[
+  {
+    "id": "11111111-1111-4111-8111-111111111111",
+    "imageName": "neconaeco/python-runner",
+    "imageTag": "python-3.12-v1",
+    "imageUri": "neconaeco/python-runner:python-3.12-v1",
+    "registryProvider": "local",
+    "runtimeImageId": "neconaeco-python-runner-python-3-12-v1",
+    "language": "python",
+    "metadataJson": {
+      "baseImage": "python:3.12-slim",
+      "installedPackages": [],
+      "resourceLimitProfile": {
+        "cpus": "0.5",
+        "memory": "256m",
+        "network": "none"
+      },
+      "keepAliveCommand": "tail -f /dev/null"
+    }
+  }
+]

@@ -18,5 +18,6 @@ export function toSeoulIso(date: Date): string {
   })
     .format(date)
     .replace(' ', 'T')
+    .replace(',', '.')
     .concat('+09:00');
 }

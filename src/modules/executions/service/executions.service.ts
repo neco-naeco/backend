@@ -16,6 +16,7 @@ export interface StartExecutionInput {
   filePath: string;
   content: string;
   timeoutMs?: number;
+  stdinLines?: string[];
   redactionTokens?: string[];
 }
 
@@ -75,6 +76,7 @@ export class ExecutionsService {
         content: input.content,
         command: input.command,
         timeoutMs: input.timeoutMs,
+        stdinLines: input.stdinLines,
       });
     } catch (error) {
       execution.stdout = '';

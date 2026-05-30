@@ -1,15 +1,17 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { spawn } from 'node:child_process';
-import type {
-  CommandRunnerInput,
-  CommandRunnerResult,
-  ExecuteMissionCodeInput,
-  PrepareMissionContainerInput,
-  RuntimeAdapter,
-  RuntimeCommandRunner,
-  RuntimeContainerHandle,
-  RuntimeExecutionResult,
+import {
+  formatStdinFromLines,
+  type CommandRunnerInput,
+  type CommandRunnerResult,
+  type ExecuteMissionCodeInput,
+  type PrepareMissionContainerInput,
+  type RemoveMissionContainerInput,
+  type RuntimeAdapter,
+  type RuntimeCommandRunner,
+  type RuntimeContainerHandle,
+  type RuntimeExecutionResult,
 } from './runtime.interfaces';
 
 @Injectable()
@@ -134,6 +136,23 @@ export class DockerRuntimeAdapter implements RuntimeAdapter {
     };
   }
 
+  async removeMissionContainer(input: RemoveMissionContainerInput): Promise<void> {
+    const result = await this.commandRunner.run({
+      command: 'docker',
+      args: ['rm', '-f', input.containerId],
+    });
+
+    if (result.timedOut) {
+      throw new Error(`Docker runtime container removal timed out: ${input.containerId}`);
+    }
+
+    if (result.exitCode !== 0) {
+      throw new Error(
+        result.stderr || `Docker runtime container removal failed: ${input.containerId}`,
+      );
+    }
+  }
+
   async executeMissionCode(
     input: ExecuteMissionCodeInput,
   ): Promise<RuntimeExecutionResult> {
@@ -173,9 +192,17 @@ export class DockerRuntimeAdapter implements RuntimeAdapter {
         };
       }
 
+      const stdin =
+        input.stdinLines === undefined ? undefined : formatStdinFromLines(input.stdinLines);
+      const execArgs =
+        stdin === undefined
+          ? ['exec', input.containerId, 'sh', '-lc', input.command]
+          : ['exec', '-i', input.containerId, 'sh', '-lc', input.command];
+
       const execResult = await this.commandRunner.run({
         command: 'docker',
-        args: ['exec', input.containerId, 'sh', '-lc', input.command],
+        args: execArgs,
+        stdin,
         timeoutMs:
           input.timeoutMs ??
           this.configService.get<number>('runtime.executionTimeoutMs') ??

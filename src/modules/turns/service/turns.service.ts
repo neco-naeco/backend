@@ -14,6 +14,7 @@ import { GameRoomMissionEntity } from '@modules/game-room-missions/entity/game-r
 import { GameRoomMissionsService } from '@modules/game-room-missions/service/game-room-missions.service';
 import { GameRoomParticipantEntity } from '@modules/game-room-participants/entity/game-room-participant.entity';
 import { GameRoomEntity } from '@modules/game-rooms/entity/game-room.entity';
+import { buildTurnEvaluationResultPayload } from '@modules/mission-results/build-turn-evaluation-result-payload';
 import { MissionResultsService } from '@modules/mission-results/service/mission-results.service';
 import {
   ExecutionStatus,
@@ -31,6 +32,11 @@ import type {
   TurnEvaluatedEvent,
   TurnSubmitEvent,
 } from '@modules/realtime/service/realtime.interfaces';
+import {
+  resolveStepPublicTestCases,
+  runStepPublicCaseJudging,
+  type PublicTestCaseJudgeDetail,
+} from '../judge/step-public-case-judge';
 import { TurnSnapshotEntity } from '../entity/turn-snapshot.entity';
 import { TurnEntity } from '../entity/turn.entity';
 
@@ -78,6 +84,12 @@ interface SnapshotFile {
   filePath: string;
   content: string;
   occurredAt?: string;
+}
+
+interface SnapshotExecutionOutcome {
+  execution: ExecutionEntity;
+  judgeStatus: MissionResultJudgeStatus;
+  publicCaseResults: PublicTestCaseJudgeDetail[] | null;
 }
 
 @Injectable()
@@ -145,11 +157,11 @@ export class TurnsService {
     trigger: TurnStatus.SUBMITTED | TurnStatus.TIMEOUT;
   }): Promise<TurnLifecycleResult> {
     const preparedState = await this.prepareTurnEndState(input);
-    const execution = await this.executeSnapshot(preparedState);
+    const executionOutcome = await this.executeSnapshot(preparedState);
 
     return this.applyExecutionOutcome({
       preparedState,
-      execution,
+      executionOutcome,
       submittedStatus: input.trigger,
     });
   }
@@ -224,7 +236,7 @@ export class TurnsService {
 
   private async executeSnapshot(
     preparedState: PreparedTurnEndState,
-  ): Promise<ExecutionEntity> {
+  ): Promise<SnapshotExecutionOutcome> {
     const projectStructure = asRecord(preparedState.mission.projectStructureJson);
     const judgePolicy = asRecord(preparedState.mission.judgePolicyJson);
     const snapshotFiles = preparedState.snapshot.codeSnapshotJson.files;
@@ -245,8 +257,7 @@ export class TurnsService {
         inferLanguageFromProjectStructure(projectStructure) ??
         inferLanguageFromPath(runtimeFilePath),
     });
-
-    return this.executionsService.executeTurnCode({
+    const executionInput = {
       gameRoomId: preparedState.room.id,
       missionId: preparedState.mission.id,
       turnId: preparedState.turn.id,
@@ -257,12 +268,39 @@ export class TurnsService {
       content: selectedFile?.content ?? '',
       timeoutMs:
         this.configService.get<number>('runtime.executionTimeoutMs') ?? undefined,
-    });
+    };
+    const publicTestCases = resolveStepPublicTestCases(
+      judgePolicy,
+      preparedState.currentStep.stepOrder,
+    );
+
+    if (publicTestCases === null) {
+      const execution = await this.executionsService.executeTurnCode(executionInput);
+
+      return {
+        execution,
+        judgeStatus: determineJudgeStatus(execution),
+        publicCaseResults: null,
+      };
+    }
+
+    const judgedOutcome = await runStepPublicCaseJudging(publicTestCases, (testCase) =>
+      this.executionsService.executeTurnCode({
+        ...executionInput,
+        stdinLines: testCase.stdinLines,
+      }),
+    );
+
+    return {
+      execution: judgedOutcome.representativeExecution,
+      judgeStatus: judgedOutcome.judgeStatus,
+      publicCaseResults: judgedOutcome.caseResults,
+    };
   }
 
   private async applyExecutionOutcome(input: {
     preparedState: PreparedTurnEndState;
-    execution: ExecutionEntity;
+    executionOutcome: SnapshotExecutionOutcome;
     submittedStatus: TurnStatus.SUBMITTED | TurnStatus.TIMEOUT;
   }): Promise<TurnLifecycleResult> {
     return this.dataSource.transaction(async (manager) => {
@@ -294,7 +332,9 @@ export class TurnsService {
         mission,
         currentStep,
         turn,
-        execution: input.execution,
+        execution: input.executionOutcome.execution,
+        judgeStatus: input.executionOutcome.judgeStatus,
+        publicCaseResults: input.executionOutcome.publicCaseResults,
         snapshot: input.preparedState.snapshot,
         occurredAt: input.preparedState.occurredAt,
         suppressNextTurnCreation: input.preparedState.suppressNextTurnCreation,
@@ -305,7 +345,7 @@ export class TurnsService {
         mission: nextState.mission,
         currentStep: nextState.currentStep,
         evaluatedTurn: turn,
-        execution: input.execution,
+        execution: input.executionOutcome.execution,
         missionResultPayload: nextState.missionResultPayload,
         judgeStatus: nextState.judgeStatus,
         occurredAt: input.preparedState.occurredAt,
@@ -326,6 +366,8 @@ export class TurnsService {
     currentStep: GameRoomMissionStepEntity;
     turn: TurnEntity;
     execution: ExecutionEntity;
+    judgeStatus: MissionResultJudgeStatus;
+    publicCaseResults: PublicTestCaseJudgeDetail[] | null;
     snapshot: TurnSnapshotEntity;
     occurredAt: Date;
     suppressNextTurnCreation: boolean;
@@ -341,7 +383,8 @@ export class TurnsService {
     const roomRepository = input.manager.getRepository(GameRoomEntity);
     const missionRepository = input.manager.getRepository(GameRoomMissionEntity);
 
-    const judgeStatus = determineJudgeStatus(input.execution);
+    const judgeStatus = input.judgeStatus;
+    const judgedStep = input.currentStep;
     let room = input.room;
     let mission = input.mission;
     let currentStep: GameRoomMissionStepEntity | null = input.currentStep;
@@ -399,13 +442,14 @@ export class TurnsService {
       strikeCount = mission.strikeCount;
     }
 
-    const missionResultPayload = buildMissionResultPayload({
+    const missionResultPayload = buildTurnEvaluationResultPayload({
       judgeStatus,
       execution: input.execution,
+      publicCaseResults: input.publicCaseResults,
       room,
       mission,
       turn: input.turn,
-      currentStep,
+      currentStep: judgedStep,
       strikeCount,
       missionFinished,
     });
@@ -659,62 +703,6 @@ function buildLifecycleEvents(input: {
             },
             occurredAt,
           },
-  };
-}
-
-function buildMissionResultPayload(input: {
-  judgeStatus: MissionResultJudgeStatus;
-  execution: ExecutionEntity;
-  room: GameRoomEntity;
-  mission: GameRoomMissionEntity;
-  turn: TurnEntity;
-  currentStep: GameRoomMissionStepEntity | null;
-  strikeCount: number;
-  missionFinished: boolean;
-}): Record<string, unknown> {
-  const isStepCleared = input.judgeStatus === MissionResultJudgeStatus.PASSED;
-  const feedbackMessage =
-    input.judgeStatus === MissionResultJudgeStatus.PASSED
-      ? '현재 미션 단계를 통과했습니다.'
-      : input.judgeStatus === MissionResultJudgeStatus.FAILED
-        ? '현재 미션 단계를 통과하지 못했습니다.'
-        : '런타임 또는 판정 처리 오류가 발생했습니다.';
-
-  return {
-    missionId: input.mission.id,
-    turnId: input.turn.id,
-    stepId: input.currentStep?.id ?? null,
-    isStepCleared,
-    isMissionCleared: isStepCleared && input.missionFinished,
-    judgeStatus: input.judgeStatus,
-    strikeCount: input.strikeCount,
-    remainingStrikeCount: Math.max(input.room.maxStrikeCount - input.strikeCount, 0),
-    feedbackMessage,
-    executionSummary: {
-      status: input.execution.status,
-      exitCode: input.execution.exitCode,
-      stdout: input.execution.stdout,
-      stderr: input.execution.stderr,
-      runtimeFailureCode: input.execution.runtimeFailureCode,
-      runtimeFailureMessage: input.execution.runtimeFailureMessage,
-    },
-    detectedIssues:
-      input.judgeStatus === MissionResultJudgeStatus.PASSED
-        ? []
-        : [
-            {
-              issueType:
-                input.judgeStatus === MissionResultJudgeStatus.ERROR
-                  ? 'RUNTIME_ERROR'
-                  : 'EXECUTION_FAILED',
-              message:
-                input.execution.runtimeFailureMessage ??
-                input.execution.stderr ??
-                '판정에 실패했습니다.',
-              filePath:
-                input.currentStep?.missionTemplateStep.targetFilePath ?? null,
-            },
-          ],
   };
 }
 

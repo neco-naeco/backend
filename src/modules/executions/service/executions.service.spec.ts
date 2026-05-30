@@ -203,4 +203,50 @@ describe('ExecutionsService', () => {
     expect(execution.runtimeFailureMessage).toBe('docker socket unavailable');
     expect(execution.finishedAt).toBeInstanceOf(Date);
   });
+
+  it('forwards stdinLines to the runtime adapter for console-driven execution', async () => {
+    const repository = createRepositoryMock();
+    const runtimeAdapter = {
+      executeMissionCode: jest.fn().mockResolvedValue({
+        kind: 'completed',
+        stdout: '5',
+        stderr: '',
+        exitCode: 0,
+      }),
+    };
+
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        ExecutionsService,
+        {
+          provide: getRepositoryToken(ExecutionEntity),
+          useValue: repository,
+        },
+        {
+          provide: RUNTIME_ADAPTER,
+          useValue: runtimeAdapter,
+        },
+      ],
+    }).compile();
+
+    const service = moduleRef.get(ExecutionsService);
+
+    await service.executeTurnCode({
+      gameRoomId: 'room-1',
+      missionId: 'mission-1',
+      turnId: 'turn-1',
+      userId: 'user-1',
+      containerId: 'container-1',
+      command: 'python /workspace/main.py',
+      filePath: '/workspace/main.py',
+      content: 'print(1)',
+      stdinLines: ['2', '+', '3'],
+    });
+
+    expect(runtimeAdapter.executeMissionCode).toHaveBeenCalledWith(
+      expect.objectContaining({
+        stdinLines: ['2', '+', '3'],
+      }),
+    );
+  });
 });

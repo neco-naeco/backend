@@ -3,6 +3,13 @@ import { DataSource, EntityManager, Repository } from 'typeorm';
 import { MissionResultJudgeStatus } from '@shared/enums';
 import { MissionResultEntity } from '../entity/mission-result.entity';
 
+export {
+  buildTurnEvaluationResultPayload,
+  type BuildTurnEvaluationResultPayloadInput,
+  type StepJudgingSummary,
+  type TurnEvaluationDetectedIssue,
+} from '../build-turn-evaluation-result-payload';
+
 export interface CreateMissionResultInput {
   manager?: EntityManager;
   gameRoomId: string;
