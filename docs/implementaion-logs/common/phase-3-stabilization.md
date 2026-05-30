@@ -104,3 +104,75 @@
 - If you touch disconnect or timeout sequencing, start from `DatabaseRealtimeDisconnectService`, `TurnsService`, and `RealtimeEventSupportService` together. Treat them as one behavioral unit.
 - Do not broaden the duplicate-submit ignore path beyond `TURN_NOT_IN_PROGRESS`.
 - Preserve the service-layer authority checks already added for room access, invitation ownership, room ownership, and current-turn ownership.
+
+---
+
+## [2026-05-30] Task 5: Implement current-step public case judging from `judgePolicyJson`
+
+**Plan reference:** `docs/plans/calculator-mission-template-runtime-judging-plan.md`
+
+**Summary:**
+- `judgePolicyJson.steps[].testCases[]`를 현재 room-mission 스텝(`stepOrder`)에 맞춰 조회하고, 동일 `container_id` 컨테이너에서 공개 케이스를 모두 실행한 뒤 `PASSED` / `FAILED` / `ERROR`를 집계했습니다.
+- 케이스별 `stdinLines`는 `ExecutionsService.executeTurnCode()`로 전달하며, 판정 비교(`stdout.trim()`, stderr, exit code)는 `integrations/runtime` 밖 `step-public-case-judge` helper에 둡니다.
+- 리뷰 반영으로 첫 실패 시 중단하지 않고 모든 케이스를 실행한 후 최종 `judgeStatus`만 집계하며, stdout mismatch 시 `detectedIssues`에 `publicCaseResults` 기반 메시지를 채웁니다.
+
+**Dependencies reviewed before starting:**
+- `docs/plans/calculator-mission-template-runtime-judging-plan.md` — Task 5 acceptance criteria
+- `docs/implementaion-logs/README.md` — logging contract
+- `docs/implementaion-logs/common/phase-2-integration.md` — Task 3·4 handoff
+- `docs/implementaion-logs/common/phase-1-foundation.md` — calculator seed `judgePolicyJson` contract
+- `docs/specs/06-gameplay-lifecycle.md` — turn submit / judge authority boundary
+- `docs/specs/07-integrations-and-ai.md` — execution-only runtime boundary
+
+**Implementation details:**
+- `resolveStepPublicTestCases()`가 mission root `judgePolicyJson.steps`에서 `stepOrder`에 맞는 케이스 번들을 파싱합니다. 번들이 없으면 기존 단일 `executeTurnCode()` 경로를 유지합니다.
+- `runStepPublicCaseJudging()`는 각 케이스마다 제출 스냅샷 파일을 덮어쓴 뒤 `stdinLines`로 실행하고, `evaluatePublicTestCaseExecution()`으로 `exitCode === 0`·빈 stderr·`stdout.trim() === expectedStdout`을 검사합니다.
+- `aggregatePublicCaseOutcomes()`는 `ERROR` > `FAILED` > `PASSED` 우선순위로 스텝 판정을 결정합니다. 대표 execution은 첫 실패 케이스, 전부 통과 시 마지막 케이스입니다.
+- `TurnsService.executeSnapshot()`이 helper 결과를 `resolveNextState()`에 전달하고, `mission_results.result_payload_json`에 `publicCaseResults`를 포함합니다.
+- `resolveDetectedIssueMessage()`는 `runtimeFailureMessage` → `stderr` → 첫 실패 `publicCaseResults` 메시지 → fallback 순으로 `detectedIssues[0].message`를 채워 빈 stderr stdout mismatch에서도 설명 가능한 메시지를 보장합니다.
+- strike 증가, mission-result 상세 페이로드 정교화, end-to-end scenario coverage는 Task 6 범위로 남깁니다.
+
+**Files changed:**
+- `src/modules/turns/judge/step-public-case-judge.ts`
+- `src/modules/turns/judge/step-public-case-judge.spec.ts`
+- `src/modules/turns/service/turns.service.ts`
+- `src/modules/turns/service/turns.service.spec.ts`
+
+**Verification:**
+- [x] `pnpm test -- src/modules/turns/judge/step-public-case-judge.spec.ts`
+- [x] `pnpm test -- src/modules/turns/service/turns.service.spec.ts`
+- [x] `pnpm typecheck`
+- [x] Subagent review 1회 — 전 케이스 실행·`detectedIssues` 메시지·divide-by-zero/invalid-number 계약 테스트 반영 후 추가 피드백 없음
+
+**Commit:**
+- `aff8f74` feat(turns): judgePolicyJson 공개 케이스 판정 추가
+
+**Impact on next tasks:**
+- Task 6 can wire strike progression and richer mission-result payloads on top of `publicCaseResults` without reimplementing case execution or stdout comparison.
+- Task 6 should extend scenario tests for failed stdout mismatch and runtime error paths while preserving the existing realtime submit → evaluate → turn-changed flow.
+- Do not move pass/fail logic into `integrations/runtime`; keep judging in `TurnsService` / judge helper.
+
+**Design decisions made:**
+- Judging lives in a dedicated helper module rather than inline in `TurnsService` to keep runtime adapters execution-only and make case aggregation testable in isolation.
+- All public cases run even after a failure so `publicCaseResults` reflects the full step attempt and final `judgeStatus` matches the plan wording.
+- Legacy missions without `steps[].testCases[]` keep the pre-Task-5 single-execution judge path via `determineJudgeStatus()`.
+
+**Deviations from spec:**
+- None intended. Calculator exact output strings (`ERROR: division by zero`, `ERROR: invalid number`, etc.) are enforced via the same trim-exact comparison as success stdout.
+
+**Trade-offs:**
+- Each public case triggers a separate `executeTurnCode()` / `docker exec`, so step judging adds latency proportional to case count. Acceptable for the six-step calculator MVP.
+- `publicCaseResults` is already persisted in mission-result payload, but Task 6 still needs client-facing detail shaping and strike/mission-finish integration tests.
+
+**Open questions:**
+- [x] Should judging stop on the first failed case? → No. Run all cases; aggregate final `judgeStatus` only.
+- [x] Can stdout mismatch with empty stderr produce an empty `detectedIssues` message? → No. Use `publicCaseResults`-based failure text before fallback.
+
+**Open risks or follow-ups:**
+- Task 6 must confirm strike increment and mission-finish behavior still follow `docs/specs/06-gameplay-lifecycle.md` when `publicCaseResults` contains mixed per-case outcomes.
+- Repeated executions in one container still depend on per-run file overwrite; add scenario coverage if state leakage appears in integration tests.
+
+**Instructions for the next worker:**
+- Start Task 6 from `TurnsService.resolveNextState()` and `buildMissionResultPayload()`; reuse `publicCaseResults` instead of re-parsing `judgePolicyJson` at the mission-results layer.
+- Preserve all-case execution and `ERROR` > `FAILED` > `PASSED` aggregation when touching the judge helper.
+- Read `database/seeds/mission_templates.json` step 5–6 cases when adding scenario tests for unsupported operator, divide-by-zero, and invalid-number paths.
