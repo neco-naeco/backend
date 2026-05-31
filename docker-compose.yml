@@ -1,18 +1,17 @@
-version: '3.9'
-
 services:
   app:
     build:
       context: .
       dockerfile: Dockerfile
-      target: production
+      target: development
     ports:
       - '8080:8080'
     env_file:
       - .env
     environment:
-      NODE_ENV: production
+      NODE_ENV: development
       DB_HOST: postgres
+      DB_SYNCHRONIZE: 'true'
       REDIS_HOST: redis
     depends_on:
       postgres:
@@ -21,7 +20,7 @@ services:
         condition: service_healthy
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-    restart: unless-stopped
+    restart: 'no'
 
   postgres:
     image: postgres:16-alpine
@@ -31,14 +30,14 @@ services:
       POSTGRES_USER: ${DB_USERNAME:-postgres}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
       POSTGRES_DB: ${DB_NAME:-neconaeco}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
+    tmpfs:
+      - /var/lib/postgresql/data
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U ${DB_USERNAME:-postgres}']
       interval: 10s
       timeout: 5s
       retries: 5
-    restart: unless-stopped
+    restart: 'no'
 
   redis:
     image: redis:7-alpine
@@ -53,8 +52,8 @@ services:
         else
           exec redis-server --save 60 1 --loglevel warning
         fi
-    volumes:
-      - redis_data:/data
+    tmpfs:
+      - /data
     healthcheck:
       test:
         - 'CMD-SHELL'
@@ -67,8 +66,4 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    restart: unless-stopped
-
-volumes:
-  postgres_data:
-  redis_data:
+    restart: 'no'
