@@ -13,6 +13,15 @@ FROM deps AS build
 COPY . .
 RUN pnpm build
 
+# ---- development stage ----
+FROM deps AS development
+COPY . .
+
+ENV NODE_ENV=development
+EXPOSE 8080
+
+CMD ["./node_modules/.bin/nest", "start", "--watch"]
+
 # ---- production stage ----
 FROM node:23-alpine AS production
 WORKDIR /app
@@ -23,6 +32,7 @@ COPY package.json pnpm-lock.yaml* pnpm-workspace.yaml* ./
 RUN pnpm install --frozen-lockfile --prod
 
 COPY --from=build /app/dist ./dist
+COPY database ./database
 
 ENV NODE_ENV=production
 EXPOSE 8080
