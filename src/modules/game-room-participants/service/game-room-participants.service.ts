@@ -4,14 +4,18 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { User } from '@modules/auth/entity/user.entity';
 import { DataSource, EntityManager, In, Repository } from 'typeorm';
 import { GameRoomEntity } from '@modules/game-rooms/entity/game-room.entity';
+import { toSeoulIso } from '@common/utils/date.util';
 import { GameRoomParticipantEntity } from '../entity/game-room-participant.entity';
 import {
   GameRoomParticipantMembershipStatus,
   GameRoomParticipantRole,
   GameRoomStatus,
 } from '@shared/enums';
+import { ListGameRoomParticipantsQueryDto } from '../dto/list-game-room-participants-query.dto';
+import { GameRoomParticipantListItemDto } from '../dto/game-room-participant-list-item.dto';
 
 interface InviteParticipantInput {
   actorUserId: string;
@@ -46,6 +50,7 @@ const WAITING_MEMBERSHIP_STATUSES = [
   GameRoomParticipantMembershipStatus.INVITED,
   GameRoomParticipantMembershipStatus.JOINED,
 ] as const;
+const DEFAULT_GAME_ROOM_TITLE = '대기방';
 
 const ALLOWED_MEMBERSHIP_TRANSITIONS: Record<
   GameRoomParticipantMembershipStatus,
@@ -66,20 +71,35 @@ const ALLOWED_MEMBERSHIP_TRANSITIONS: Record<
 export class GameRoomParticipantsService {
   constructor(private readonly dataSource: DataSource) {}
 
-  async listParticipantsForUser(
-    userId: string,
-  ): Promise<GameRoomParticipantEntity[]> {
+  async listParticipantsForUser(input: {
+    authenticatedUserId: string;
+    query: ListGameRoomParticipantsQueryDto;
+  }): Promise<GameRoomParticipantListItemDto[]> {
     const participantRepository = this.dataSource.getRepository(
       GameRoomParticipantEntity,
     );
+
+    if (
+      input.query.userId !== undefined &&
+      input.query.userId !== input.authenticatedUserId
+    ) {
+      throw new ForbiddenException({
+        code: 'FORBIDDEN_RESOURCE_ACCESS',
+        message: 'userId does not match the authenticated user.',
+      });
+    }
+
     const accessibleMemberships = await participantRepository.find({
       relations: { gameRoom: true },
       where: {
-        userId,
+        userId: input.authenticatedUserId,
         membershipStatus: In([
           GameRoomParticipantMembershipStatus.INVITED,
           GameRoomParticipantMembershipStatus.JOINED,
         ]),
+        ...(input.query.gameRoomId
+          ? { gameRoomId: input.query.gameRoomId }
+          : {}),
       },
       order: {
         createdAt: 'ASC',
@@ -96,15 +116,36 @@ export class GameRoomParticipantsService {
       return [];
     }
 
-    return participantRepository.find({
+    const participants = await participantRepository.find({
       relations: { gameRoom: true },
       where: {
         gameRoomId: In(accessibleGameRoomIds),
+        ...(input.query.membershipStatus
+          ? { membershipStatus: input.query.membershipStatus }
+          : {}),
       },
       order: {
         createdAt: 'ASC',
       },
     });
+
+    const nicknameByUserId = await this.loadNicknameByUserId(
+      participants.map((participant) => participant.userId),
+    );
+
+    return participants.map((participant) => ({
+      id: participant.id,
+      gameRoomId: participant.gameRoomId,
+      gameRoomTitle: DEFAULT_GAME_ROOM_TITLE,
+      userId: participant.userId,
+      nickname: nicknameByUserId.get(participant.userId) ?? participant.userId,
+      role: participant.role,
+      membershipStatus: participant.membershipStatus,
+      status: participant.membershipStatus,
+      roomStatus: participant.gameRoom.status,
+      createdAt: toSeoulIso(participant.createdAt),
+      updatedAt: toSeoulIso(participant.updatedAt),
+    }));
   }
 
   async inviteParticipant(
@@ -481,5 +522,23 @@ export class GameRoomParticipantsService {
     for (const userId of uniqueUserIds) {
       await this.acquireWaitingRoomLock(manager, userId);
     }
+  }
+
+  private async loadNicknameByUserId(
+    userIds: string[],
+  ): Promise<Map<string, string>> {
+    const uniqueUserIds = [...new Set(userIds)];
+
+    if (uniqueUserIds.length === 0) {
+      return new Map();
+    }
+
+    const users = await this.dataSource.getRepository(User).find({
+      where: {
+        id: In(uniqueUserIds),
+      },
+    });
+
+    return new Map(users.map((user) => [user.id, user.nickname] as const));
   }
 }

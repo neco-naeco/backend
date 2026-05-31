@@ -93,7 +93,23 @@ describe('GameRoomParticipantsService', () => {
         } as GameRoomParticipantEntity,
       ]);
 
-    const result = await service.listParticipantsForUser('owner-1');
+    dataSource.getRepository = jest.fn((entity) => {
+      if (entity === GameRoomParticipantEntity) {
+        return participantRepository;
+      }
+
+      return {
+        find: jest.fn().mockResolvedValue([
+          { id: 'owner-1', nickname: 'owner' },
+          { id: 'invitee-1', nickname: 'invitee' },
+        ]),
+      };
+    });
+
+    const result = await service.listParticipantsForUser({
+      authenticatedUserId: 'owner-1',
+      query: {},
+    });
 
     expect(dataSource.getRepository).toHaveBeenCalledWith(GameRoomParticipantEntity);
     expect(participantRepository.find).toHaveBeenNthCalledWith(1, {
@@ -118,17 +134,52 @@ describe('GameRoomParticipantsService', () => {
         createdAt: 'ASC',
       },
     });
-    expect(result.map((participant) => participant.id)).toEqual([
-      'participant-1',
-      'participant-2',
+    expect(result).toEqual([
+      expect.objectContaining({
+        id: 'participant-1',
+        gameRoomTitle: '대기방',
+        userId: 'owner-1',
+        nickname: 'owner',
+        role: GameRoomParticipantRole.OWNER,
+        membershipStatus: GameRoomParticipantMembershipStatus.JOINED,
+        status: GameRoomParticipantMembershipStatus.JOINED,
+        roomStatus: GameRoomStatus.WAITING,
+      }),
+      expect.objectContaining({
+        id: 'participant-2',
+        userId: 'invitee-1',
+        nickname: 'invitee',
+        role: GameRoomParticipantRole.PARTICIPANT,
+        membershipStatus: GameRoomParticipantMembershipStatus.INVITED,
+        status: GameRoomParticipantMembershipStatus.INVITED,
+        roomStatus: GameRoomStatus.WAITING,
+      }),
     ]);
   });
 
   it('returns an empty participant list when the authenticated user has no accessible room', async () => {
     participantRepository.find.mockResolvedValueOnce([]);
 
-    await expect(service.listParticipantsForUser('owner-1')).resolves.toEqual([]);
+    await expect(
+      service.listParticipantsForUser({
+        authenticatedUserId: 'owner-1',
+        query: {},
+      }),
+    ).resolves.toEqual([]);
     expect(participantRepository.find).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects a mismatched userId query parameter', async () => {
+    await expect(
+      service.listParticipantsForUser({
+        authenticatedUserId: 'owner-1',
+        query: { userId: 'other-user' },
+      }),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({
+        code: 'FORBIDDEN_RESOURCE_ACCESS',
+      }),
+    });
   });
 
   it('allows only the room owner to invite participants', async () => {
