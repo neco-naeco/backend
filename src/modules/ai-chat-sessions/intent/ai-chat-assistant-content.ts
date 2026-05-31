@@ -56,9 +56,11 @@ export function buildCommandAssistantContent(
   switch (command.requestType) {
     case AiChatRequestType.ROOM_CREATE:
       return {
-        content: command.desiredDifficulty
-          ? `${command.desiredDifficulty} 난이도로 방을 만들 준비가 됐어요. 미션을 선택해 주세요.`
-          : '방을 만들 수 있어요. 원하는 난이도를 알려주세요.',
+        content: command.missionTemplateId
+          ? '방 생성을 완료했어요. 대기방에서 참가자를 초대하거나 게임을 시작할 수 있어요.'
+          : command.desiredDifficulty
+            ? `${command.desiredDifficulty} 난이도로 방을 만들 준비가 됐어요. 미션을 선택해 주세요.`
+            : '방을 만들 수 있어요. 원하는 난이도를 알려주세요.',
         metadata: {
           ...(command.desiredDifficulty ? { difficulty: command.desiredDifficulty } : {}),
           ...(command.missionTemplateTitle

@@ -100,6 +100,10 @@ interface CommandExecutionOutcome {
   failureCode?: string;
 }
 
+interface PendingRoomCreateContext {
+  desiredDifficulty: NonNullable<RoomCreateCommandDto['desiredDifficulty']>;
+}
+
 const DEFAULT_ROOM_CREATE_SETTINGS = {
   timeLimitSeconds: 30,
   maxStrikeCount: 3,
@@ -232,7 +236,13 @@ export class AiChatSessionsService {
         );
       }
 
-      const { command, assistantHint } = validation;
+      const { assistantHint } = validation;
+      const command = await this.resolveCommandWithRoomCreateContext(
+        session,
+        aiChatSessionId,
+        validation.command,
+        dto.message,
+      );
       const execution = await this.executeCommand(user, session, command);
 
       if (execution.requestStatus === AiChatRequestStatus.FAILED) {
@@ -255,6 +265,11 @@ export class AiChatSessionsService {
         execution.followUpGameRoomId,
       );
       const commandResult = execution.commandResult;
+      const assistantMetadata = await this.resolveAssistantMetadata(
+        execution.command,
+        commandResult,
+        followUp.metadata,
+      );
 
       const sessionRepo = manager.getRepository(AiChatSession);
       const managedSession = await sessionRepo.findOneOrFail({
@@ -289,7 +304,7 @@ export class AiChatSessionsService {
         senderUserId: null,
         messageType: AiChatMessageType.COMMAND_RESULT,
         content: followUp.content,
-        metadataJson: followUp.metadata,
+        metadataJson: assistantMetadata,
       });
       const savedAssistantMessage = await messageRepo.save(assistantMessage);
 
@@ -516,14 +531,14 @@ export class AiChatSessionsService {
         difficulty: command.desiredDifficulty,
         ...DEFAULT_ROOM_CREATE_SETTINGS,
       });
-      const ownerNickname = await this.loadSingleNickname(user.userId);
-
       return {
         requestStatus: AiChatRequestStatus.COMPLETED,
         command,
         commandResult: this.commandResultMapper.toSuccessResult(command, {
           gameRoomId: gameRoom.id,
-          participants: ownerNickname ? [ownerNickname] : null,
+          title: command.missionTemplateTitle ?? null,
+          participants: null,
+          started: false,
         }),
         nextSessionGameRoomId: gameRoom.id,
         followUpGameRoomId: gameRoom.id,
@@ -942,6 +957,115 @@ export class AiChatSessionsService {
     return null;
   }
 
+  private async resolveCommandWithRoomCreateContext(
+    session: AiChatSession,
+    aiChatSessionId: string,
+    command: AiChatCommandDto,
+    userMessage: string,
+  ): Promise<AiChatCommandDto> {
+    if (
+      session.gameRoomId ||
+      command.requestType !== AiChatRequestType.ROOM_CREATE ||
+      command.desiredDifficulty ||
+      (!command.missionTemplateId &&
+        !command.missionTemplateTitle &&
+        !this.isMissionTemplateSelectionMessage(userMessage))
+    ) {
+      return command;
+    }
+
+    const pendingContext = await this.resolvePendingRoomCreateContext(aiChatSessionId);
+    if (!pendingContext) {
+      return command;
+    }
+
+    const templates = await this.gameRoomMissionsService.listSelectableMissionTemplates(
+      pendingContext.desiredDifficulty,
+    );
+    const selectedTemplate = command.missionTemplateId
+      ? templates.find((template) => template.templateId === command.missionTemplateId)
+      : templates.find((template) =>
+          this.matchesMissionTemplateTitle(command.missionTemplateTitle, template.title) ||
+          this.matchesMissionTemplateTitle(userMessage, template.title),
+        );
+
+    if (!selectedTemplate) {
+      return command;
+    }
+
+    return {
+      ...command,
+      desiredDifficulty: pendingContext.desiredDifficulty,
+      missionTemplateId: selectedTemplate.templateId,
+      missionTemplateTitle: selectedTemplate.title,
+    };
+  }
+
+  private async resolvePendingRoomCreateContext(
+    aiChatSessionId: string,
+  ): Promise<PendingRoomCreateContext | null> {
+    const requests = await this.aiChatRequestRepository.find({
+      where: {
+        aiChatSessionId,
+        requestType: AiChatRequestType.ROOM_CREATE,
+        status: AiChatRequestStatus.COMPLETED,
+      },
+      order: { requestedAt: 'DESC' },
+    });
+
+    for (const request of requests) {
+      const command = this.readRecord(request.requestPayload?.command);
+      const responsePayload = this.readRecord(request.responsePayload);
+      const commandResult = this.readRecord(responsePayload?.commandResult);
+      const desiredDifficulty = command?.desiredDifficulty;
+
+      if (
+        commandResult?.status === AiChatCommandResultStatus.PENDING &&
+        this.isMissionDifficulty(desiredDifficulty)
+      ) {
+        return { desiredDifficulty };
+      }
+    }
+
+    return null;
+  }
+
+  private matchesMissionTemplateTitle(
+    selectedTitle: string | undefined,
+    templateTitle: string,
+  ): boolean {
+    if (!selectedTitle) {
+      return false;
+    }
+
+    const normalizedSelectedTitle = this.normalizeMissionTemplateTitle(selectedTitle);
+    const normalizedTemplateTitle = this.normalizeMissionTemplateTitle(templateTitle);
+
+    return (
+      normalizedSelectedTitle === normalizedTemplateTitle ||
+      normalizedSelectedTitle.includes(normalizedTemplateTitle) ||
+      normalizedTemplateTitle.includes(normalizedSelectedTitle)
+    );
+  }
+
+  private normalizeMissionTemplateTitle(title: string): string {
+    return title
+      .replace(/["'`]/g, '')
+      .replace(/\s+/g, '')
+      .replace(/(미션|템플릿|으로|진행할게요|진행할게|진행|선택할게요|선택할게|선택|해줘|할게요|할게)/g, '')
+      .toLowerCase();
+  }
+
+  private isMissionTemplateSelectionMessage(message: string): boolean {
+    return /(미션|템플릿).*(진행|선택|할게|해줘)/i.test(message);
+  }
+
+  private isMissionDifficulty(
+    value: unknown,
+  ): value is NonNullable<RoomCreateCommandDto['desiredDifficulty']> {
+    return value === 'EASY' || value === 'NORMAL' || value === 'HARD';
+  }
+
   private readRecord(value: unknown): Record<string, unknown> | null {
     return typeof value === 'object' && value !== null
       ? (value as Record<string, unknown>)
@@ -975,14 +1099,6 @@ export class AiChatSessionsService {
       .filter((nickname): nickname is string => nickname !== undefined);
   }
 
-  private async loadSingleNickname(userId: string): Promise<string | null> {
-    const user = await this.userRepository.findOne({
-      where: { id: userId },
-    });
-
-    return user?.nickname ?? null;
-  }
-
   private async resolveCommandFollowUp(
     command: Parameters<LlmFollowUpGeneratorPort['generateCommandFollowUp']>[0]['command'],
     userMessage: string,
@@ -1009,6 +1125,45 @@ export class AiChatSessionsService {
         templateKey: null,
       };
     }
+  }
+
+  private async resolveAssistantMetadata(
+    command: AiChatCommandDto,
+    commandResult: AiChatCommandResultDto,
+    followUpMetadata: Record<string, unknown> | null,
+  ): Promise<Record<string, unknown> | null> {
+    if (
+      command.requestType !== AiChatRequestType.ROOM_CREATE ||
+      commandResult.status !== AiChatCommandResultStatus.PENDING
+    ) {
+      if (
+        command.requestType === AiChatRequestType.ROOM_CREATE &&
+        commandResult.status === AiChatCommandResultStatus.SUCCESS &&
+        commandResult.gameRoomId
+      ) {
+        return {
+          ...(followUpMetadata ?? {}),
+          gameRoomId: commandResult.gameRoomId,
+          roomStatus: GameRoomStatus.WAITING,
+        };
+      }
+
+      return followUpMetadata;
+    }
+
+    if (!command.desiredDifficulty || command.missionTemplateId) {
+      return followUpMetadata;
+    }
+
+    const templates = await this.gameRoomMissionsService.listSelectableMissionTemplates(
+      command.desiredDifficulty,
+    );
+
+    return {
+      ...(followUpMetadata ?? {}),
+      difficulty: command.desiredDifficulty,
+      templates,
+    };
   }
 
   private async requireOwnedSession(

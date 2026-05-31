@@ -16,6 +16,7 @@ describe('AiChatCommandResultMapper', () => {
       status: AiChatCommandResultStatus.PENDING,
       apiPath: '/v1/game-rooms',
       gameRoomId: null,
+      title: null,
       participants: null,
       started: null,
     });

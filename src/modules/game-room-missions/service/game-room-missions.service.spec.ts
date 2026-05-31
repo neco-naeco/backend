@@ -21,7 +21,7 @@ jest.mock('node:crypto', () => ({
 describe('GameRoomMissionsService', () => {
   let service: GameRoomMissionsService;
   let missionTemplateRepository: jest.Mocked<
-    Pick<Repository<MissionTemplateEntity>, 'findOne'>
+    Pick<Repository<MissionTemplateEntity>, 'find' | 'findOne'>
   >;
   let missionTemplateStepRepository: jest.Mocked<
     Pick<Repository<MissionTemplateStepEntity>, 'find'>
@@ -49,6 +49,7 @@ describe('GameRoomMissionsService', () => {
       removeMissionContainer: jest.fn().mockResolvedValue(undefined),
     };
     missionTemplateRepository = {
+      find: jest.fn(),
       findOne: jest.fn(),
     };
     missionTemplateStepRepository = {
@@ -116,6 +117,30 @@ describe('GameRoomMissionsService', () => {
       dataSource as unknown as DataSource,
       runtimeAdapter as unknown as RuntimeAdapter,
     );
+  });
+
+  it('lists selectable mission templates for a difficulty', async () => {
+    missionTemplateRepository.find.mockResolvedValue([
+      {
+        id: 'template-1',
+        title: '초급 미션',
+        description: '쉬운 난이도 미션입니다.',
+        difficulty: 'EASY',
+      } as MissionTemplateEntity,
+    ]);
+
+    await expect(service.listSelectableMissionTemplates('EASY')).resolves.toEqual([
+      {
+        templateId: 'template-1',
+        title: '초급 미션',
+        description: '쉬운 난이도 미션입니다.',
+        difficulty: 'EASY',
+      },
+    ]);
+    expect(missionTemplateRepository.find).toHaveBeenCalledWith({
+      where: { difficulty: 'EASY' },
+      order: { title: 'ASC' },
+    });
   });
 
   it('validates mission template selection before room creation', async () => {
