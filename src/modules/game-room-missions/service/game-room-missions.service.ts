@@ -47,6 +47,13 @@ export interface RecordFailedAttemptInput extends TransitionCurrentStepInput {
   strikeLimit: number;
 }
 
+export interface SelectableMissionTemplate {
+  templateId: string;
+  title: string;
+  description: string;
+  difficulty: string;
+}
+
 export interface CompleteCurrentStepResult {
   mission: GameRoomMissionEntity;
   clearedStep: GameRoomMissionStepEntity;
@@ -102,6 +109,24 @@ export class GameRoomMissionsService {
         error instanceof Error ? error.stack : String(error),
       );
     }
+  }
+
+  async listSelectableMissionTemplates(
+    difficulty: string,
+  ): Promise<SelectableMissionTemplate[]> {
+    const missionTemplateRepository =
+      this.dataSource.getRepository(MissionTemplateEntity);
+    const missionTemplates = await missionTemplateRepository.find({
+      where: { difficulty },
+      order: { title: 'ASC' },
+    });
+
+    return missionTemplates.map((missionTemplate) => ({
+      templateId: missionTemplate.id,
+      title: missionTemplate.title,
+      description: missionTemplate.description,
+      difficulty: missionTemplate.difficulty,
+    }));
   }
 
   async validateMissionTemplateSelection(

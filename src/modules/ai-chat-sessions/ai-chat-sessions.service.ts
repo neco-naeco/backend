@@ -255,6 +255,11 @@ export class AiChatSessionsService {
         execution.followUpGameRoomId,
       );
       const commandResult = execution.commandResult;
+      const assistantMetadata = await this.resolveAssistantMetadata(
+        execution.command,
+        commandResult,
+        followUp.metadata,
+      );
 
       const sessionRepo = manager.getRepository(AiChatSession);
       const managedSession = await sessionRepo.findOneOrFail({
@@ -289,7 +294,7 @@ export class AiChatSessionsService {
         senderUserId: null,
         messageType: AiChatMessageType.COMMAND_RESULT,
         content: followUp.content,
-        metadataJson: followUp.metadata,
+        metadataJson: assistantMetadata,
       });
       const savedAssistantMessage = await messageRepo.save(assistantMessage);
 
@@ -1009,6 +1014,31 @@ export class AiChatSessionsService {
         templateKey: null,
       };
     }
+  }
+
+  private async resolveAssistantMetadata(
+    command: AiChatCommandDto,
+    commandResult: AiChatCommandResultDto,
+    followUpMetadata: Record<string, unknown> | null,
+  ): Promise<Record<string, unknown> | null> {
+    if (
+      command.requestType !== AiChatRequestType.ROOM_CREATE ||
+      commandResult.status !== AiChatCommandResultStatus.PENDING ||
+      !command.desiredDifficulty ||
+      command.missionTemplateId
+    ) {
+      return followUpMetadata;
+    }
+
+    const templates = await this.gameRoomMissionsService.listSelectableMissionTemplates(
+      command.desiredDifficulty,
+    );
+
+    return {
+      ...(followUpMetadata ?? {}),
+      difficulty: command.desiredDifficulty,
+      templates,
+    };
   }
 
   private async requireOwnedSession(

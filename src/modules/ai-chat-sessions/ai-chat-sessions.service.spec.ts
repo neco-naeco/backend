@@ -80,6 +80,14 @@ describe('AiChatSessionsService', () => {
     } as unknown as jest.Mocked<GameStartFlowService>;
 
     gameRoomMissionsService = {
+      listSelectableMissionTemplates: jest.fn().mockResolvedValue([
+        {
+          templateId: 'template-1',
+          title: '초급 미션',
+          description: '쉬운 난이도 미션입니다.',
+          difficulty: 'EASY',
+        },
+      ]),
       validateMissionTemplateSelection: jest.fn(),
     } as unknown as jest.Mocked<GameRoomMissionsService>;
 
@@ -298,13 +306,32 @@ describe('AiChatSessionsService', () => {
         }),
       );
       expect(result).toMatchObject({
+        aiChatRequestId: 'request-1',
         requestType: AiChatRequestType.ROOM_CREATE,
         requestStatus: AiChatRequestStatus.COMPLETED,
+        assistantMessage: {
+          aiChatRequestId: 'request-1',
+          metadata: {
+            difficulty: 'EASY',
+            templates: [
+              {
+                templateId: 'template-1',
+                title: '초급 미션',
+                description: '쉬운 난이도 미션입니다.',
+                difficulty: 'EASY',
+              },
+            ],
+          },
+        },
         commandResult: {
           commandType: AiChatRequestType.ROOM_CREATE,
           status: AiChatCommandResultStatus.PENDING,
         },
       });
+      expect(Array.isArray(result.assistantMessage.metadata?.templates)).toBe(true);
+      expect(gameRoomMissionsService.listSelectableMissionTemplates).toHaveBeenCalledWith(
+        'EASY',
+      );
     });
 
     it('still persists chat when follow-up generation throws', async () => {
