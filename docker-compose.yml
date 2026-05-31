@@ -22,6 +22,14 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     restart: 'no'
 
+  python-runner:
+    image: neconaeco/python-runner:python-3.12-v1
+    build:
+      context: ./docker/runtime/python-runner
+    profiles:
+      - runtime-images
+    restart: 'no'
+
   postgres:
     image: postgres:16-alpine
     ports:

@@ -20,6 +20,9 @@ coverage/
 *.d.ts.map
 tsconfig*.tsbuildinfo
 
+# Local runtime images
+/docker/
+
 # Logs
 *.log
 npm-debug.log*
