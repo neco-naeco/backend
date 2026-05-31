@@ -15,6 +15,7 @@ export class AiChatCommandResultMapper {
       status: AiChatCommandResultStatus.PENDING,
       apiPath: this.resolveApiPath(command),
       gameRoomId: this.resolveGameRoomId(command),
+      title: null,
       participants: null,
       started: command.requestType === AiChatRequestType.GAME_START ? false : null,
     };
@@ -25,6 +26,7 @@ export class AiChatCommandResultMapper {
     details: {
       apiPath?: string | null;
       gameRoomId?: string | null;
+      title?: string | null;
       participants?: string[] | null;
       started?: boolean | null;
     },
@@ -34,6 +36,7 @@ export class AiChatCommandResultMapper {
       status: AiChatCommandResultStatus.SUCCESS,
       apiPath: details.apiPath ?? this.resolveApiPath(command),
       gameRoomId: details.gameRoomId ?? this.resolveGameRoomId(command),
+      title: details.title ?? null,
       participants: details.participants ?? null,
       started:
         details.started ??
@@ -46,6 +49,7 @@ export class AiChatCommandResultMapper {
     details?: {
       apiPath?: string | null;
       gameRoomId?: string | null;
+      title?: string | null;
       participants?: string[] | null;
       started?: boolean | null;
     },
@@ -66,6 +70,7 @@ export class AiChatCommandResultMapper {
       gameRoomId:
         details?.gameRoomId ??
         (command ? this.resolveGameRoomId(command) : null),
+      title: details?.title ?? null,
       participants: details?.participants ?? null,
       started:
         details?.started ??

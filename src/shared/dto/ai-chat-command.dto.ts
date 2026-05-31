@@ -58,6 +58,7 @@ export interface AiChatCommandResultDto {
   status: AiChatCommandResultStatus;
   apiPath: string | null;
   gameRoomId: string | null;
+  title: string | null;
   participants: string[] | null;
   started: boolean | null;
 }

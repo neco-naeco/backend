@@ -394,10 +394,6 @@ describe('AiChatSessionsService', () => {
       gameRoomsService.createRoom.mockResolvedValue({
         id: 'room-1',
       } as never);
-      userRepository.findOne.mockResolvedValue({
-        id: user.userId,
-        nickname: 'owner',
-      } as User);
 
       const result = await service.createMessage(user, sessionId, {
         message: '쉬운 방 만들고 template-1으로 진행할게',
@@ -418,7 +414,91 @@ describe('AiChatSessionsService', () => {
           commandType: AiChatRequestType.ROOM_CREATE,
           status: AiChatCommandResultStatus.SUCCESS,
           gameRoomId: 'room-1',
-          participants: ['owner'],
+          participants: null,
+          started: false,
+        },
+      });
+    });
+
+    it('continues pending ROOM_CREATE when the user selects a mission template by title', async () => {
+      llmIntentParser.parseUserMessage.mockResolvedValue({
+        requestType: 'ROOM_CREATE',
+        payload: {},
+      });
+      llmFollowUpGenerator.generateCommandFollowUp.mockRejectedValueOnce(
+        new Error('follow-up unavailable'),
+      );
+      gameRoomMissionsService.listSelectableMissionTemplates.mockResolvedValueOnce([
+        {
+          templateId: 'template-stdin-calculator',
+          title: '표준 입력 계산기',
+          description: '표준 입력으로 계산식을 처리하는 미션입니다.',
+          difficulty: 'EASY',
+        },
+      ]);
+      aiChatRequestRepository.find.mockResolvedValue([
+        {
+          requestPayload: {
+            command: {
+              requestType: AiChatRequestType.ROOM_CREATE,
+              desiredDifficulty: 'EASY',
+            },
+          },
+          responsePayload: {
+            commandResult: {
+              status: AiChatCommandResultStatus.PENDING,
+              gameRoomId: null,
+            },
+          },
+          requestedAt: new Date('2026-05-04T00:10:00Z'),
+        } as unknown as AiChatRequest,
+      ]);
+      mockTransactions();
+      gameRoomMissionsService.validateMissionTemplateSelection.mockResolvedValue({
+        id: 'template-stdin-calculator',
+      } as never);
+      gameRoomsService.createRoom.mockResolvedValue({
+        id: 'room-1',
+      } as never);
+
+      const result = await service.createMessage(user, sessionId, {
+        message: '표준 입력 계산기 템플릿으로 진행할게요.',
+      });
+
+      expect(gameRoomMissionsService.validateMissionTemplateSelection).toHaveBeenCalledWith(
+        'EASY',
+        'template-stdin-calculator',
+      );
+      expect(gameRoomsService.createRoom).toHaveBeenCalledWith({
+        ownerUserId: user.userId,
+        difficulty: 'EASY',
+        timeLimitSeconds: 30,
+        maxStrikeCount: 3,
+        minParticipants: 2,
+        maxParticipants: 4,
+      });
+      expect(result).toMatchObject({
+        aiChatRequestId: 'request-1',
+        requestType: AiChatRequestType.ROOM_CREATE,
+        requestStatus: AiChatRequestStatus.COMPLETED,
+        assistantMessage: {
+          aiChatRequestId: 'request-1',
+          senderType: AiChatMessageSenderType.ASSISTANT,
+          messageType: AiChatMessageType.COMMAND_RESULT,
+          content: expect.stringContaining('방 생성을 완료'),
+          metadata: {
+            gameRoomId: 'room-1',
+            roomStatus: 'WAITING',
+          },
+        },
+        commandResult: {
+          commandType: AiChatRequestType.ROOM_CREATE,
+          status: AiChatCommandResultStatus.SUCCESS,
+          apiPath: '/v1/game-rooms',
+          gameRoomId: 'room-1',
+          title: '표준 입력 계산기',
+          participants: null,
+          started: false,
         },
       });
     });
