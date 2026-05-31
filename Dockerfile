@@ -1,6 +1,7 @@
 FROM node:23-alpine AS base
 WORKDIR /app
 
+RUN apk add --no-cache docker-cli
 RUN npm install -g pnpm
 
 # ---- deps stage ----
@@ -26,6 +27,7 @@ CMD ["./node_modules/.bin/nest", "start", "--watch"]
 FROM node:23-alpine AS production
 WORKDIR /app
 
+RUN apk add --no-cache docker-cli
 RUN npm install -g pnpm
 
 COPY package.json pnpm-lock.yaml* pnpm-workspace.yaml* ./
