@@ -1,47 +1,48 @@
-# Python Runner Image Placeholder Plan
+# Python Runner Image Bootstrap
 
 ## Goal
 
-Reserve the missing local runtime-image source directory so the repository keeps
-the expected build path for `neconaeco/python-runner:python-3.12-v1` without
-committing runtime image sources yet.
+Restore the missing local runtime-image build source so the backend can build the
+seeded mission runner image `neconaeco/python-runner:python-3.12-v1`.
 
 ## What Was Added
 
-- `docker/runtime/python-runner/.gitkeep`
-- `.gitignore` rules that preserve the directory path while ignoring future local
-  runtime-image contents by default
+- `docker/runtime/python-runner/Dockerfile`
+- `docker/runtime/python-runner/.dockerignore`
+- `docker/runtime/python-runner/README.md`
 
-## Why This Exists
+## Image Contract
 
-The current backend runtime adapter and seed metadata still expect a runner image
-identified as `neconaeco/python-runner:python-3.12-v1`. That expectation comes
-from:
+The current backend runtime adapter expects a runner image that can:
+
+- start from `docker run -d ... sh -lc 'tail -f /dev/null'`
+- accept file writes into `/workspace` via `docker exec -i ... cat > /workspace/...`
+- execute commands like `python /workspace/main.py`
+
+Those expectations come from:
 
 - `src/integrations/runtime/runtime-defaults.service.ts`
 - `database/seeds/docker_images.json`
 - `database/seeds/mission_templates.json`
 
-However, the repository does not currently include the actual image source files.
-The placeholder directory keeps the expected path visible so a later task can add
-the real Docker build context without changing Compose paths again.
-
-## Current State
-
-- `docker-compose.yml` still points to `./docker/runtime/python-runner`
-- the repository now preserves that directory with `.gitkeep`
-- runtime-image source files remain intentionally absent
-- local teams can place untracked build files under this directory without
-  changing the committed path contract
-
-## Deferred Work
-
-A future runtime-image task still needs to add the real contents required to make
-this build command succeed:
+## Current Build Command
 
 ```sh
 docker compose --profile runtime-images build python-runner
 ```
 
-Until that work lands, the placeholder only documents the expected directory
-contract.
+## Expected Output
+
+After a successful build, this command should succeed:
+
+```sh
+docker image inspect neconaeco/python-runner:python-3.12-v1
+```
+
+## Notes
+
+- The image is intentionally minimal and uses `python:3.12-slim`.
+- The default command is `tail -f /dev/null` because the runtime adapter starts an
+  idle sibling container first and executes user code later with `docker exec`.
+- `/workspace` is the expected work directory, matching the seeded calculator
+  mission template.
