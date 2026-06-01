@@ -6,8 +6,11 @@
 import { ConfigService } from '@nestjs/config';
 import { ConflictException, ForbiddenException } from '@nestjs/common';
 import { DataSource, EntityManager } from 'typeorm';
+import { of, lastValueFrom } from 'rxjs';
 import { GameRoomEntity } from '@modules/game-rooms/entity/game-room.entity';
 import { GameRoomsService } from '@modules/game-rooms/service/game-rooms.service';
+import { GameRoomsController } from '@modules/game-rooms/controller/game-rooms.controller';
+import { GameStartFlowService } from '@modules/game-rooms/service/game-start-flow.service';
 import { GameRoomMissionsService } from '@modules/game-room-missions/service/game-room-missions.service';
 import { GameRoomParticipantEntity } from '@modules/game-room-participants/entity/game-room-participant.entity';
 import { GameRoomParticipantsService } from '@modules/game-room-participants/service/game-room-participants.service';
@@ -32,8 +35,56 @@ import {
 } from '@shared/enums';
 import { ExecutionEntity } from '@modules/executions/entity/execution.entity';
 import type { TurnLifecycleResult } from '@modules/turns/service/turns.service';
+import { ResponseInterceptor } from '@common/interceptors/response.interceptor';
 
 describe('Spec validation scenarios (docs/specs/08-security-testing-and-delivery.md)', () => {
+  describe('documented HTTP success contracts', () => {
+    it('wraps game start success as data.success only', async () => {
+      const controller = new GameRoomsController(
+        {
+          listAccessibleRooms: jest.fn(),
+        } as unknown as GameRoomsService,
+        {
+          startGame: jest.fn().mockResolvedValue({
+            gameRoom: createScenarioRoom(),
+            gameRoomMission: createScenarioMission(),
+            currentTurn: createScenarioTurn(),
+            currentStep: createScenarioCurrentStep(),
+          }),
+        } as unknown as GameStartFlowService,
+      );
+      const interceptor = new ResponseInterceptor<{ success: boolean }>();
+      const request: { requestId?: string } = {};
+      const context = {
+        switchToHttp: () => ({
+          getRequest: () => request,
+        }),
+      } as never;
+
+      const controllerResult = await controller.startGame(
+        'user-1',
+        '11111111-1111-4111-8111-111111111111',
+        { missionTemplateId: '22222222-2222-4222-8222-222222222222' },
+      );
+      const response = await lastValueFrom(
+        interceptor.intercept(context, {
+          handle: () => of(controllerResult),
+        }),
+      );
+
+      expect(response).toEqual({
+        data: {
+          success: true,
+        },
+        meta: {
+          requestId: expect.any(String),
+        },
+        error: null,
+      });
+      expect(request.requestId).toEqual(expect.any(String));
+    });
+  });
+
   describe('authorization failure paths', () => {
     it('blocks room access for non-members', async () => {
       const participantRepository = {
