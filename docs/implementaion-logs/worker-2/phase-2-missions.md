@@ -27,7 +27,8 @@
 - Added migration `1779760000000-CreateMissionAndGameStartTables.ts` for `docker_images`, `mission_templates`, `mission_template_steps`, `game_room_missions`, and `game_room_mission_steps`, including the `mission_templates.docker_image_id -> docker_images.id` foreign key and the documented `game_room_missions(game_room_id)` index.
 - `GameRoomMissionsService.createMissionForGameStart()` now validates template existence, room-difficulty alignment, presence of at least one ordered template step, single-mission-per-room protection, mission metadata copying, and first-step initialization.
 - `GameRoomsService.startGame()` now enforces `OWNER + JOINED` ownership, `WAITING` room status, joined-participant min/max checks, room-level advisory locking, mission creation delegation, and the final room `IN_PROGRESS` transition.
-- Added `POST /v1/game-rooms/{gameRoomId}/start` in `GameRoomsController`, with UUID validation for `gameRoomId` and `missionTemplateId`, returning the started room ID, room-mission ID, status, and Seoul-time `updatedAt`.
+- Added `POST /v1/game-rooms/{gameRoomId}/start` in `GameRoomsController`, with UUID validation for `gameRoomId` and `missionTemplateId`.
+- Superseded note as of `2026-06-01`: the public HTTP success payload for this endpoint is now the documented minimal shape `{ data: { success: true }, meta, error: null }`; richer room/mission state remains available only in internal service results and realtime events.
 - Added room-level advisory locking to participant mutations as well, so invite, accept, deny, leave, and start serialize against the same room lifecycle boundary rather than racing on per-user locks only.
 
 **Files changed:**

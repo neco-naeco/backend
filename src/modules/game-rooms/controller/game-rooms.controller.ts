@@ -33,10 +33,7 @@ class StartGameRequestBody {
 }
 
 interface GameRoomStartResponse {
-  gameRoomId: string;
-  gameRoomMissionId: string;
-  status: string;
-  updatedAt: string;
+  success: boolean;
 }
 
 @Controller('game-rooms')
@@ -73,17 +70,14 @@ export class GameRoomsController {
     @Param('gameRoomId', new ParseUUIDPipe({ version: '4' })) gameRoomId: string,
     @Body() body: StartGameRequestBody,
   ): Promise<GameRoomStartResponse> {
-    const result = await this.gameStartFlowService.startGame({
+    await this.gameStartFlowService.startGame({
       actorUserId: userId,
       gameRoomId,
       missionTemplateId: body.missionTemplateId,
     });
 
     return {
-      gameRoomId: result.gameRoom.id,
-      gameRoomMissionId: result.gameRoomMission.id,
-      status: result.gameRoom.status,
-      updatedAt: toSeoulIso(result.gameRoom.updatedAt),
+      success: true,
     };
   }
 }
