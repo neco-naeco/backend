@@ -21,7 +21,12 @@ coverage/
 tsconfig*.tsbuildinfo
 
 # Local runtime images
-/docker/
+/docker/*
+!/docker/runtime/
+/docker/runtime/*
+!/docker/runtime/python-runner/
+/docker/runtime/python-runner/*
+!/docker/runtime/python-runner/.gitkeep
 
 # Logs
 *.log
