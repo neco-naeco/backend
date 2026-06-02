@@ -49,7 +49,13 @@ describe('DatabaseRealtimeDisconnectService', () => {
         evaluatedEvent: {
           gameRoomId: 'room-1',
           evaluatedTurn: {},
-          evaluationResult: {},
+          evaluationResult: {
+            feedbackMessage: 'timed out',
+            detectedIssues: [],
+            strikeCount: 0,
+            remainingStrikeCount: 3,
+            executionSummary: {},
+          },
           occurredAt: '',
         },
         gameStateUpdatedEvent: {
@@ -76,12 +82,10 @@ describe('DatabaseRealtimeDisconnectService', () => {
     const realtimeEventSupportService: jest.Mocked<
       Pick<
         RealtimeEventSupportService,
-        | 'publishRoomParticipantsUpdated'
         | 'publishTurnLifecycleResult'
         | 'publishGameStateUpdated'
       >
     > = {
-      publishRoomParticipantsUpdated: jest.fn(),
       publishTurnLifecycleResult: jest.fn(),
       publishGameStateUpdated: jest.fn(),
     };
@@ -120,7 +124,6 @@ describe('DatabaseRealtimeDisconnectService', () => {
       gameRoomId: 'room-1',
       userId: 'user-1',
     });
-    expect(realtimeEventSupportService.publishRoomParticipantsUpdated).toHaveBeenCalled();
     expect(turnsService.timeoutTurn).toHaveBeenCalledWith(
       expect.objectContaining({
         gameRoomId: 'room-1',
@@ -168,7 +171,13 @@ describe('DatabaseRealtimeDisconnectService', () => {
         evaluatedEvent: {
           gameRoomId: 'room-1',
           evaluatedTurn: {},
-          evaluationResult: {},
+          evaluationResult: {
+            feedbackMessage: 'timed out',
+            detectedIssues: [],
+            strikeCount: 0,
+            remainingStrikeCount: 3,
+            executionSummary: {},
+          },
           occurredAt: '',
         },
         gameStateUpdatedEvent: {
@@ -204,7 +213,6 @@ describe('DatabaseRealtimeDisconnectService', () => {
         }),
       } as unknown as RealtimeRoomStateService,
       {
-        publishRoomParticipantsUpdated: jest.fn(),
         publishTurnLifecycleResult: jest.fn(),
         publishGameStateUpdated: jest.fn(),
       } as unknown as RealtimeEventSupportService,

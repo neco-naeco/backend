@@ -236,11 +236,23 @@ export class GameRoomMissionsService {
 
       const savedGameRoomMissionSteps =
         await gameRoomMissionStepRepository.save(gameRoomMissionSteps);
+      for (const savedStep of savedGameRoomMissionSteps) {
+        savedStep.missionTemplateStep =
+          missionTemplateSteps.find(
+            (missionTemplateStep) =>
+              missionTemplateStep.id === savedStep.missionTemplateStepId,
+          ) ?? savedStep.missionTemplateStep;
+      }
       const firstStep = savedGameRoomMissionSteps[0];
 
       savedGameRoomMission.currentStepId = firstStep.id;
 
-      return gameRoomMissionRepository.save(savedGameRoomMission);
+      const finalizedMission =
+        await gameRoomMissionRepository.save(savedGameRoomMission);
+      finalizedMission.missionTemplate = missionTemplate;
+      finalizedMission.steps = savedGameRoomMissionSteps;
+
+      return finalizedMission;
     } catch (error) {
       if (runtimeContainerId) {
         await this.releasePreparedRuntimeContainer(runtimeContainerId);

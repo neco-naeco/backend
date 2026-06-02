@@ -42,15 +42,6 @@ export class DatabaseRealtimeDisconnectService implements RealtimeDisconnectServ
       return;
     }
 
-    const participantsUpdated =
-      await this.realtimeRoomStateService.buildParticipantsUpdatedEvent({
-        gameRoomId: input.gameRoomId,
-        changedUserId: input.userId,
-      });
-    this.realtimeEventSupportService.publishRoomParticipantsUpdated(
-      participantsUpdated,
-    );
-
     const currentTurn = await this.findCurrentTurn(input.gameRoomId);
     const shouldTimeoutCurrentTurn =
       disconnectResult.room.status === GameRoomStatus.IN_PROGRESS &&

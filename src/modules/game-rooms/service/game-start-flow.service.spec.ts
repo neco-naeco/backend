@@ -18,6 +18,11 @@ describe('GameStartFlowService', () => {
           id: 'mission-1',
           missionTemplateId: 'template-1',
           strikeCount: 0,
+          missionTemplate: {
+            title: 'Calculator Relay',
+            description: 'Complete the calculator mission.',
+            language: 'python',
+          },
           projectStructureJson: {
             rootPath: '/workspace',
             entryFilePath: 'main.py',
@@ -41,7 +46,13 @@ describe('GameStartFlowService', () => {
         },
         currentStep: {
           id: 'step-1',
+          missionTemplateStepId: 'template-step-1',
+          stepOrder: 1,
           status: GameRoomMissionStepStatus.IN_PROGRESS,
+          missionTemplateStep: {
+            title: 'Step 1',
+            description: 'Complete the first step.',
+          },
         },
       } as never),
     };
@@ -82,7 +93,17 @@ describe('GameStartFlowService', () => {
         }),
         missionState: expect.objectContaining({
           missionId: 'mission-1',
+          missionTemplateId: 'template-1',
+          currentStepId: 'step-1',
+          title: 'Calculator Relay',
+          description: 'Complete the calculator mission.',
+          language: 'python',
           currentStepStatus: GameRoomMissionStepStatus.IN_PROGRESS,
+          gameRoomMissionStepId: 'step-1',
+          missionTemplateStepId: 'template-step-1',
+          stepOrder: 1,
+          stepTitle: 'Step 1',
+          stepDescription: 'Complete the first step.',
           projectStructure: expect.objectContaining({
             files: [
               expect.objectContaining({

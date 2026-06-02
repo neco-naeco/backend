@@ -8,6 +8,10 @@ import {
   resolveFirstFailedPublicCase,
   type PublicTestCaseJudgeDetail,
 } from '@modules/turns/judge/step-public-case-judge';
+import type {
+  RealtimeDetectedIssue,
+  RealtimeEvaluationResult,
+} from '@modules/realtime/service/realtime.interfaces';
 import { MissionResultJudgeStatus } from '@shared/enums';
 
 export interface BuildTurnEvaluationResultPayloadInput {
@@ -29,16 +33,14 @@ export interface StepJudgingSummary {
   errorCount: number;
 }
 
-export interface TurnEvaluationDetectedIssue {
+export interface TurnEvaluationDetectedIssue extends RealtimeDetectedIssue {
   issueType: 'RUNTIME_ERROR' | 'EXECUTION_FAILED' | 'PUBLIC_TEST_CASE_FAILED';
-  message: string;
-  filePath: string | null;
   caseName?: string;
 }
 
 export function buildTurnEvaluationResultPayload(
   input: BuildTurnEvaluationResultPayloadInput,
-): Record<string, unknown> {
+): RealtimeEvaluationResult {
   const isStepCleared = input.judgeStatus === MissionResultJudgeStatus.PASSED;
   const stepJudgingSummary = buildStepJudgingSummary(input.publicCaseResults);
 
@@ -89,7 +91,7 @@ function buildDetectedIssues(
     return [];
   }
 
-  const filePath = input.currentStep?.missionTemplateStep?.targetFilePath ?? null;
+  const filePath = input.currentStep?.missionTemplateStep?.targetFilePath ?? '';
 
   if (input.publicCaseResults !== null && input.publicCaseResults.length > 0) {
     return input.publicCaseResults

@@ -28,6 +28,11 @@ import type {
   GameStateUpdatedEvent,
   MissionResultEvent,
   RealtimeFileContentBuffer,
+  RealtimeEvaluationResult,
+  RealtimeMissionState,
+  RealtimeMissionStepSummary,
+  RealtimeProjectStructure,
+  RealtimeTurnState,
   TurnChangedEvent,
   TurnEvaluatedEvent,
   TurnSubmitEvent,
@@ -339,10 +344,14 @@ export class TurnsService {
         occurredAt: input.preparedState.occurredAt,
         suppressNextTurnCreation: input.preparedState.suppressNextTurnCreation,
       });
+      const hydratedMission = await this.getMissionOrThrow(
+        missionRepository,
+        nextState.mission.id,
+      );
 
       return buildLifecycleEvents({
         room: nextState.room,
-        mission: nextState.mission,
+        mission: hydratedMission,
         currentStep: nextState.currentStep,
         evaluatedTurn: turn,
         execution: input.executionOutcome.execution,
@@ -376,7 +385,7 @@ export class TurnsService {
     mission: GameRoomMissionEntity;
     currentStep: GameRoomMissionStepEntity | null;
     nextTurn: TurnEntity | null;
-    missionResultPayload: Record<string, unknown>;
+    missionResultPayload: RealtimeEvaluationResult;
     judgeStatus: MissionResultJudgeStatus;
     missionFinished: boolean;
   }> {
@@ -574,6 +583,7 @@ export class TurnsService {
     missionId: string,
   ): Promise<GameRoomMissionEntity> {
     const mission = await repository.findOne({
+      relations: { missionTemplate: true, steps: { missionTemplateStep: true } },
       where: { id: missionId },
     });
 
@@ -623,7 +633,7 @@ function buildLifecycleEvents(input: {
   currentStep: GameRoomMissionStepEntity | null;
   evaluatedTurn: TurnEntity;
   execution: ExecutionEntity;
-  missionResultPayload: Record<string, unknown>;
+  missionResultPayload: RealtimeEvaluationResult;
   judgeStatus: MissionResultJudgeStatus;
   occurredAt: Date;
   nextTurn: TurnEntity | null;
@@ -680,8 +690,6 @@ function buildLifecycleEvents(input: {
         : {
             gameRoomId: input.room.id,
             previousTurnId: input.evaluatedTurn.id,
-            currentTurnId: input.nextTurn.id,
-            currentTurnUserId: input.nextTurn.playerUserId,
             missionState,
             turnState: buildTurnState(input.room, input.nextTurn),
             nextPlayerId: input.nextTurn.playerUserId,
@@ -724,12 +732,21 @@ function buildMissionState(input: {
   mission: GameRoomMissionEntity;
   currentStep: GameRoomMissionStepEntity | null;
   snapshotFiles: SnapshotFile[];
-}): Record<string, unknown> {
+}): RealtimeMissionState {
   return {
     missionId: input.mission.id,
     missionTemplateId: input.mission.missionTemplateId,
     currentStepId: input.currentStep?.id ?? null,
     currentStepStatus: input.currentStep?.status ?? null,
+    gameRoomMissionStepId: input.currentStep?.id ?? null,
+    missionTemplateStepId: input.currentStep?.missionTemplateStepId ?? null,
+    stepOrder: input.currentStep?.stepOrder ?? null,
+    stepTitle: input.currentStep?.missionTemplateStep?.title ?? '',
+    stepDescription: input.currentStep?.missionTemplateStep?.description ?? '',
+    steps: buildMissionSteps(input.mission.steps),
+    title: input.mission.missionTemplate?.title ?? '',
+    description: input.mission.missionTemplate?.description ?? '',
+    language: input.mission.missionTemplate?.language ?? '',
     difficulty: input.room.difficulty,
     strikeCount: input.mission.strikeCount,
     projectStructure: withSnapshotBackedProjectStructure(
@@ -739,10 +756,28 @@ function buildMissionState(input: {
   };
 }
 
+function buildMissionSteps(
+  missionSteps: GameRoomMissionEntity['steps'] | undefined,
+): RealtimeMissionStepSummary[] {
+  if (!Array.isArray(missionSteps)) {
+    return [];
+  }
+
+  return missionSteps.map((step) => ({
+    gameRoomMissionStepId: step.id,
+    missionTemplateStepId: step.missionTemplateStepId,
+    stepOrder: step.stepOrder,
+    title: step.missionTemplateStep?.title ?? '',
+    description: step.missionTemplateStep?.description ?? '',
+    status: step.status,
+    targetFilePath: step.missionTemplateStep?.targetFilePath,
+  }));
+}
+
 function buildTurnState(
   room: GameRoomEntity,
   turn: TurnEntity,
-): Record<string, unknown> {
+): RealtimeTurnState {
   return {
     turnId: turn.id,
     turnNumber: turn.turnNumber,
@@ -920,7 +955,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function withSnapshotBackedProjectStructure(
   projectStructureJson: Record<string, unknown>,
   snapshotFiles: SnapshotFile[],
-): Record<string, unknown> {
+): RealtimeProjectStructure {
   const projectStructure = asRecord(projectStructureJson);
   const files = Array.isArray(projectStructure.files) ? projectStructure.files : [];
 
@@ -942,8 +977,9 @@ function withSnapshotBackedProjectStructure(
             inferLanguageFromPath(filePath) ??
             'text',
           readonly: typeof file.readonly === 'boolean' ? file.readonly : false,
-          fileUrl:
-            asString(file.fileUrl) ?? buildInlineFileUrl(content),
+          fileUrl: snapshotFile
+            ? buildInlineFileUrl(content)
+            : asString(file.fileUrl) ?? buildInlineFileUrl(content),
         };
       }),
   };

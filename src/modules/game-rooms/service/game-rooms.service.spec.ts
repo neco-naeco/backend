@@ -27,6 +27,7 @@ describe('GameRoomsService', () => {
     Pick<
       GameRoomMissionsService,
       | 'createMissionForGameStart'
+      | 'validateMissionTemplateSelection'
       | 'transitionCurrentStepToInProgress'
       | 'releasePreparedRuntimeContainer'
     >
@@ -52,6 +53,7 @@ describe('GameRoomsService', () => {
 
     gameRoomMissionsService = {
       createMissionForGameStart: jest.fn(),
+      validateMissionTemplateSelection: jest.fn(),
       transitionCurrentStepToInProgress: jest.fn(),
       releasePreparedRuntimeContainer: jest.fn().mockResolvedValue(undefined),
     };
@@ -314,6 +316,12 @@ describe('GameRoomsService', () => {
       id: 'mission-1',
       containerId: 'runtime-container-1',
       currentStepId: 'step-1',
+      missionTemplate: {
+        id: 'template-1',
+        title: 'Calculator',
+        description: 'Build a calculator.',
+        language: 'python',
+      },
     } as never);
     turnsService.createInitialTurn.mockResolvedValue({
       id: 'turn-1',
@@ -355,6 +363,9 @@ describe('GameRoomsService', () => {
       roomDifficulty: 'EASY',
       missionTemplateId: 'template-1',
     });
+    expect(
+      gameRoomMissionsService.validateMissionTemplateSelection,
+    ).toHaveBeenCalledWith('EASY', 'template-1');
     expect(turnsService.createInitialTurn).toHaveBeenCalledWith({
       manager,
       gameRoomId: 'room-1',
@@ -389,6 +400,68 @@ describe('GameRoomsService', () => {
       }),
     });
     expect(gameRoomMissionsService.releasePreparedRuntimeContainer).not.toHaveBeenCalled();
+  });
+
+  it('reloads the mission template when mission start returns a mission without relation metadata', async () => {
+    roomRepository.findOne.mockResolvedValue({
+      id: 'room-1',
+      ownerUserId: 'owner-1',
+      status: GameRoomStatus.WAITING,
+      difficulty: 'EASY',
+      timeLimitSeconds: 30,
+      minParticipants: 2,
+      maxParticipants: 4,
+    } as GameRoomEntity);
+    participantRepository.findOne.mockResolvedValue({
+      id: 'owner-participant-1',
+      gameRoomId: 'room-1',
+      userId: 'owner-1',
+      role: GameRoomParticipantRole.OWNER,
+      membershipStatus: GameRoomParticipantMembershipStatus.JOINED,
+    } as GameRoomParticipantEntity);
+    participantRepository.count.mockResolvedValue(2);
+    gameRoomMissionsService.createMissionForGameStart.mockResolvedValue({
+      id: 'mission-1',
+      containerId: 'runtime-container-1',
+      currentStepId: 'step-1',
+      missionTemplateId: 'template-1',
+    } as never);
+    gameRoomMissionsService.validateMissionTemplateSelection.mockResolvedValue({
+      id: 'template-1',
+      title: 'Calculator',
+      description: 'Build a calculator.',
+      language: 'python',
+      difficulty: 'EASY',
+    } as never);
+    turnsService.createInitialTurn.mockResolvedValue({
+      id: 'turn-1',
+      playerUserId: 'owner-1',
+      turnNumber: 1,
+      status: 'IN_PROGRESS',
+    } as never);
+    gameRoomMissionsService.transitionCurrentStepToInProgress.mockResolvedValue({
+      id: 'step-1',
+      status: 'IN_PROGRESS',
+    } as never);
+    roomRepository.save.mockImplementation(async (room) => room as never);
+
+    const result = await service.startGame({
+      actorUserId: 'owner-1',
+      gameRoomId: 'room-1',
+      missionTemplateId: 'template-1',
+    });
+
+    expect(
+      gameRoomMissionsService.validateMissionTemplateSelection,
+    ).toHaveBeenCalledWith('EASY', 'template-1');
+    expect(result.gameRoomMission.missionTemplate).toEqual(
+      expect.objectContaining({
+        id: 'template-1',
+        title: 'Calculator',
+        description: 'Build a calculator.',
+        language: 'python',
+      }),
+    );
   });
 
   it('removes a prepared runtime container when later start flow steps fail', async () => {

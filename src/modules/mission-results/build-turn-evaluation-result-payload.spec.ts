@@ -60,9 +60,18 @@ describe('buildTurnEvaluationResultPayload', () => {
     });
 
     expect(payload).toMatchObject({
+      feedbackMessage: expect.any(String),
       stepOrder: 1,
       strikeCount: 1,
       remainingStrikeCount: 2,
+      executionSummary: {
+        status: ExecutionStatus.SUCCESS,
+        exitCode: 0,
+        stdout: '6',
+        stderr: '',
+        runtimeFailureCode: null,
+        runtimeFailureMessage: null,
+      },
       stepJudgingSummary: {
         totalCases: 2,
         passedCount: 1,
@@ -154,7 +163,7 @@ describe('buildTurnEvaluationResultPayload', () => {
       {
         issueType: 'RUNTIME_ERROR',
         message: 'Mission runtime container is not available.',
-        filePath: null,
+        filePath: '',
       },
     ]);
   });

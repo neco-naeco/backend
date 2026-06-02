@@ -277,6 +277,7 @@ describe('RealtimeGateway', () => {
       data: {
         gameRoomId: 'room-001',
         userId: 'user-001',
+        sessionId: 'session-001',
         filePath: 'main.py',
         content: 'print(\"hello\")\n',
         occurredAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
@@ -452,7 +453,12 @@ describe('RealtimeGateway', () => {
 
     sendTurnSubmit(ownerSocket, {
       gameRoomId: 'room-001',
-      occurredAt: '2026-05-22T11:00:00+09:00',
+      userId: 'user-001',
+      turnId: 'turn-001',
+      submittedAt: '2026-05-22T11:00:00+09:00',
+      codeSnapshot: {
+        files: [],
+      },
     });
 
     await flushMicrotasks();
@@ -520,7 +526,15 @@ function sendTurnSubmit(
   socket: WebSocket,
   payload: {
     gameRoomId: string;
-    occurredAt: string;
+    userId: string;
+    turnId: string;
+    codeSnapshot: {
+      files: Array<{
+        filePath: string;
+        content: string;
+      }>;
+    };
+    submittedAt: string;
   },
 ): void {
   socket.send(

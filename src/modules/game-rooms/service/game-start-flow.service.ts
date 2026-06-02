@@ -1,6 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { toSeoulIso } from '@common/utils/date.util';
+import { GameRoomMissionStepEntity } from '@modules/game-room-missions/entity/game-room-mission-step.entity';
 import { RealtimeEventSupportService } from '@modules/realtime/service/realtime-event-support.service';
+import type {
+  RealtimeMissionStepSummary,
+  RealtimeProjectStructure,
+} from '@modules/realtime/service/realtime.interfaces';
 import { GameRoomsService, StartGameInput, StartGameResult } from './game-rooms.service';
 
 @Injectable()
@@ -18,6 +23,15 @@ export class GameStartFlowService {
       missionTemplateId: result.gameRoomMission.missionTemplateId,
       currentStepId: result.currentStep.id,
       currentStepStatus: result.currentStep.status,
+      gameRoomMissionStepId: result.currentStep.id,
+      missionTemplateStepId: result.currentStep.missionTemplateStepId,
+      stepOrder: result.currentStep.stepOrder,
+      stepTitle: result.currentStep.missionTemplateStep?.title ?? '',
+      stepDescription: result.currentStep.missionTemplateStep?.description ?? '',
+      steps: buildMissionSteps(result.gameRoomMission.steps),
+      title: result.gameRoomMission.missionTemplate?.title ?? '',
+      description: result.gameRoomMission.missionTemplate?.description ?? '',
+      language: result.gameRoomMission.missionTemplate?.language ?? '',
       difficulty: result.gameRoom.difficulty,
       strikeCount: result.gameRoomMission.strikeCount,
       projectStructure: withProjectStructureFileUrls(
@@ -63,7 +77,7 @@ export class GameStartFlowService {
 
 function withProjectStructureFileUrls(
   projectStructureJson: Record<string, unknown>,
-): Record<string, unknown> {
+): RealtimeProjectStructure {
   const projectStructure = isRecord(projectStructureJson) ? projectStructureJson : {};
   const files = Array.isArray(projectStructure.files) ? projectStructure.files : [];
 
@@ -112,4 +126,28 @@ function asString(value: unknown): string | null {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
+}
+
+function buildMissionSteps(
+  steps: GameRoomMissionStepEntity[] | null | undefined,
+): RealtimeMissionStepSummary[] {
+  if (!Array.isArray(steps)) {
+    return [];
+  }
+
+  return steps
+    .filter(
+      (step): step is NonNullable<typeof step> =>
+        Boolean(step?.id && step.missionTemplateStepId && step.stepOrder && step.status),
+    )
+    .map((step) => ({
+      gameRoomMissionStepId: step.id!,
+      missionTemplateStepId: step.missionTemplateStepId!,
+      stepOrder: step.stepOrder!,
+      title: asString(step.missionTemplateStep?.title) ?? '',
+      description: asString(step.missionTemplateStep?.description) ?? '',
+      status: step.status!,
+      targetFilePath: asString(step.missionTemplateStep?.targetFilePath) ?? undefined,
+    }))
+    .sort((left, right) => left.stepOrder - right.stepOrder);
 }

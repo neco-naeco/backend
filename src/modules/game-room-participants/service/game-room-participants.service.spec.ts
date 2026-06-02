@@ -1,9 +1,12 @@
 /// <reference types="jest" />
 
+import { ModuleRef } from '@nestjs/core';
 import { In, Repository } from 'typeorm';
 import { GameRoomEntity } from '@modules/game-rooms/entity/game-room.entity';
 import { GameRoomParticipantsService } from './game-room-participants.service';
 import { GameRoomParticipantEntity } from '../entity/game-room-participant.entity';
+import { RealtimeEventSupportService } from '@modules/realtime/service/realtime-event-support.service';
+import { RealtimeRoomStateService } from '@modules/realtime/service/realtime-room-state.service';
 import {
   GameRoomParticipantMembershipStatus,
   GameRoomParticipantRole,
@@ -21,6 +24,13 @@ describe('GameRoomParticipantsService', () => {
   let roomRepository: jest.Mocked<Pick<Repository<GameRoomEntity>, 'findOne'>>;
   let manager: { getRepository: jest.Mock; query: jest.Mock };
   let dataSource: { transaction: jest.Mock; getRepository: jest.Mock };
+  let realtimeRoomStateService: jest.Mocked<
+    Pick<RealtimeRoomStateService, 'buildParticipantsUpdatedEvent'>
+  >;
+  let realtimeEventSupportService: jest.Mocked<
+    Pick<RealtimeEventSupportService, 'publishRoomParticipantsUpdated'>
+  >;
+  let moduleRef: ModuleRef;
 
   beforeEach(() => {
     participantRepository = {
@@ -51,7 +61,37 @@ describe('GameRoomParticipantsService', () => {
       getRepository: jest.fn(() => participantRepository),
     };
 
-    service = new GameRoomParticipantsService(dataSource as never);
+    realtimeRoomStateService = {
+      buildParticipantsUpdatedEvent: jest.fn().mockResolvedValue({
+        gameRoomId: 'room-1',
+        participants: [],
+        changedParticipant: null,
+        gameState: { status: GameRoomStatus.WAITING },
+        missionState: null,
+        occurredAt: '2026-06-01T10:00:00+09:00',
+      }),
+    };
+    realtimeEventSupportService = {
+      publishRoomParticipantsUpdated: jest.fn(),
+    };
+    moduleRef = {
+      get: jest.fn((token: unknown) => {
+        if (token === RealtimeRoomStateService) {
+          return realtimeRoomStateService;
+        }
+
+        if (token === RealtimeEventSupportService) {
+          return realtimeEventSupportService;
+        }
+
+        throw new Error(`Unexpected module token: ${String(token)}`);
+      }),
+    } as unknown as ModuleRef;
+
+    service = new GameRoomParticipantsService(
+      dataSource as never,
+      moduleRef,
+    );
   });
 
   it('lists participant state only for rooms accessible to the authenticated user', async () => {
@@ -372,6 +412,15 @@ describe('GameRoomParticipantsService', () => {
       role: GameRoomParticipantRole.PARTICIPANT,
       membershipStatus: GameRoomParticipantMembershipStatus.INVITED,
     });
+    expect(realtimeRoomStateService.buildParticipantsUpdatedEvent).toHaveBeenCalledWith({
+      gameRoomId: 'room-1',
+      changedUserId: 'invitee-1',
+    });
+    expect(realtimeEventSupportService.publishRoomParticipantsUpdated).toHaveBeenCalledWith(
+      expect.objectContaining({
+        gameRoomId: 'room-1',
+      }),
+    );
   });
 
   it('rejects invites from an owner who already left the room', async () => {
@@ -444,5 +493,14 @@ describe('GameRoomParticipantsService', () => {
     expect(result.membershipChanged).toBe(true);
     expect(participant.membershipStatus).toBe(GameRoomParticipantMembershipStatus.LEFT);
     expect(result.joinedParticipantCount).toBe(1);
+    expect(realtimeRoomStateService.buildParticipantsUpdatedEvent).toHaveBeenCalledWith({
+      gameRoomId: 'room-1',
+      changedUserId: 'player-1',
+    });
+    expect(realtimeEventSupportService.publishRoomParticipantsUpdated).toHaveBeenCalledWith(
+      expect.objectContaining({
+        gameRoomId: 'room-1',
+      }),
+    );
   });
 });
