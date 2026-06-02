@@ -38,6 +38,11 @@ describe('RealtimeTurnTimeoutService', () => {
           },
           evaluationResult: {
             judgeStatus: 'FAILED',
+            feedbackMessage: 'timed out',
+            detectedIssues: [],
+            strikeCount: 1,
+            remainingStrikeCount: 2,
+            executionSummary: {},
           },
           occurredAt: '2026-05-26T10:00:00+09:00',
         },

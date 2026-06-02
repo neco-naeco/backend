@@ -21,11 +21,17 @@ export interface CodeChangePayload {
 
 export interface TurnSubmitPayload {
   gameRoomId: string;
-  occurredAt?: string;
-  files?: TurnSubmitFilePayload[];
+  userId: string;
+  turnId: string;
+  codeSnapshot: TurnCodeSnapshotPayload;
+  submittedAt: string;
 }
 
-export interface TurnSubmitFilePayload {
+export interface TurnCodeSnapshotPayload {
+  files: TurnCodeSnapshotFilePayload[];
+}
+
+export interface TurnCodeSnapshotFilePayload {
   filePath: string;
   content: string;
 }
@@ -46,7 +52,7 @@ export interface RoomParticipantsUpdatedEvent {
   participants: RoomParticipantView[];
   changedParticipant: RoomParticipantView | null;
   gameState: Record<string, unknown>;
-  missionState: Record<string, unknown> | null;
+  missionState: RealtimeMissionState | null;
   occurredAt: string;
 }
 
@@ -58,6 +64,7 @@ export interface RealtimeJoinRoomState {
 export interface CodeUpdatedEvent {
   gameRoomId: string;
   userId: string;
+  sessionId?: string;
   filePath: string;
   content: string;
   occurredAt: string;
@@ -96,10 +103,83 @@ export interface TurnSubmitEvent {
   occurredAt: string;
 }
 
+export interface RealtimeProjectFile {
+  filePath: string;
+  language: string;
+  readonly: boolean;
+  fileUrl: string;
+  content?: string;
+  [key: string]: unknown;
+}
+
+export interface RealtimeProjectStructure {
+  files: RealtimeProjectFile[];
+  [key: string]: unknown;
+}
+
+export interface RealtimeMissionStepSummary {
+  gameRoomMissionStepId: string;
+  missionTemplateStepId: string;
+  stepOrder: number;
+  title: string;
+  description: string;
+  status: string;
+  targetFilePath?: string;
+  [key: string]: unknown;
+}
+
+export interface RealtimeMissionState {
+  missionId?: string | null;
+  missionTemplateId?: string | null;
+  currentStepId?: string | null;
+  currentStepStatus?: string | null;
+  gameRoomMissionStepId?: string | null;
+  missionTemplateStepId?: string | null;
+  stepOrder?: number | null;
+  stepTitle?: string;
+  stepDescription?: string;
+  steps?: RealtimeMissionStepSummary[];
+  title: string;
+  description: string;
+  language: string;
+  difficulty: string;
+  projectStructure: RealtimeProjectStructure;
+  [key: string]: unknown;
+}
+
+export interface RealtimeDetectedIssue {
+  issueType: string;
+  message: string;
+  filePath: string;
+  lineNumber?: number;
+  [key: string]: unknown;
+}
+
+export interface RealtimeEvaluationResult {
+  feedbackMessage: string;
+  detectedIssues: RealtimeDetectedIssue[];
+  strikeCount: number;
+  remainingStrikeCount: number;
+  executionSummary: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+export interface RealtimeTurnState {
+  turnId: string;
+  turnNumber: number;
+  currentPlayerId: string;
+  startedAt: string;
+  deadlineAt: string;
+  timeLimitSeconds: number;
+  remainingTimeSeconds: number;
+  status: string;
+  [key: string]: unknown;
+}
+
 export interface GameStartedEvent {
   gameRoomId: string;
   gameState: Record<string, unknown>;
-  missionState: Record<string, unknown>;
+  missionState: RealtimeMissionState;
   uiHints: Record<string, unknown>;
   occurredAt: string;
 }
@@ -107,7 +187,7 @@ export interface GameStartedEvent {
 export interface TurnEvaluatedEvent {
   gameRoomId: string;
   evaluatedTurn: Record<string, unknown>;
-  evaluationResult: Record<string, unknown>;
+  evaluationResult: RealtimeEvaluationResult;
   occurredAt: string;
   aiNotice?: RealtimeAssistiveNotice | null;
 }
@@ -115,12 +195,10 @@ export interface TurnEvaluatedEvent {
 export interface TurnChangedEvent {
   gameRoomId: string;
   previousTurnId: string | null;
-  currentTurnId: string | null;
-  currentTurnUserId: string | null;
-  missionState?: Record<string, unknown> | null;
-  turnState?: Record<string, unknown> | null;
-  nextPlayerId?: string | null;
-  turnSnapshotId?: string | null;
+  missionState: RealtimeMissionState | null;
+  turnState: RealtimeTurnState;
+  nextPlayerId: string;
+  turnSnapshotId: string;
   occurredAt: string;
 }
 

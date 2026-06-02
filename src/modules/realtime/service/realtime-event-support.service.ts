@@ -21,6 +21,8 @@ import type {
   TurnSubmitEvent,
 } from './realtime.interfaces';
 
+const EMPTY_MISSION_STATE: Record<string, unknown> = {};
+
 @Injectable()
 export class RealtimeEventSupportService {
   private readonly logger = new Logger(RealtimeEventSupportService.name);
@@ -107,14 +109,14 @@ export class RealtimeEventSupportService {
   async publishTurnChanged(event: TurnChangedEvent): Promise<void> {
     await this.saveCurrentTurnStateBestEffort({
       gameRoomId: event.gameRoomId,
-      currentTurnId: event.currentTurnId,
-      currentTurnUserId: event.currentTurnUserId,
+      currentTurnId: event.turnState.turnId,
+      currentTurnUserId: event.turnState.currentPlayerId,
     });
     await this.seedInitialFileBuffersBestEffort({
       gameRoomId: event.gameRoomId,
-      turnId: event.currentTurnId,
-      userId: event.currentTurnUserId,
-      missionState: isRecord(event.missionState) ? event.missionState : {},
+      turnId: event.turnState.turnId,
+      userId: event.turnState.currentPlayerId,
+      missionState: event.missionState ?? EMPTY_MISSION_STATE,
       occurredAt: event.occurredAt,
     });
 

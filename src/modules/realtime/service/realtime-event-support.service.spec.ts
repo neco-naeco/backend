@@ -52,12 +52,13 @@ describe('RealtimeEventSupportService', () => {
       },
       missionState: {
         missionId: 'mission-1',
+        title: 'Calculator Relay',
+        description: 'Complete the calculator mission.',
+        language: 'python',
+        difficulty: 'EASY',
         projectStructure: {
           files: [
-            {
-              filePath: 'main.py',
-              content: 'print("hello")\n',
-            },
+            createProjectFile('main.py', 'print("hello")\n'),
           ],
         },
       },
@@ -80,15 +81,32 @@ describe('RealtimeEventSupportService', () => {
         status: 'SUBMITTED',
       },
       evaluationResult: {
-        executionStatus: 'SUCCESS',
+        feedbackMessage: 'step cleared',
+        detectedIssues: [],
+        strikeCount: 0,
+        remainingStrikeCount: 3,
+        executionSummary: {
+          executionStatus: 'SUCCESS',
+        },
       },
       occurredAt: '2026-05-22T10:00:01+09:00',
     });
     await service.publishTurnChanged({
       gameRoomId: 'room-1',
       previousTurnId: 'turn-1',
-      currentTurnId: 'turn-2',
-      currentTurnUserId: 'user-2',
+      missionState: null,
+      turnState: {
+        turnId: 'turn-2',
+        turnNumber: 2,
+        currentPlayerId: 'user-2',
+        startedAt: '2026-05-22T10:00:02+09:00',
+        deadlineAt: '2026-05-22T10:00:32+09:00',
+        timeLimitSeconds: 30,
+        remainingTimeSeconds: 30,
+        status: 'IN_PROGRESS',
+      },
+      nextPlayerId: 'user-2',
+      turnSnapshotId: 'snapshot-1',
       occurredAt: '2026-05-22T10:00:02+09:00',
     });
     await service.publishGameStateUpdated({
@@ -126,11 +144,14 @@ describe('RealtimeEventSupportService', () => {
           },
           missionState: {
             missionId: 'mission-1',
+            title: 'Calculator Relay',
+            description: 'Complete the calculator mission.',
+            language: 'python',
+            difficulty: 'EASY',
             projectStructure: {
               files: [
                 {
-                  filePath: 'main.py',
-                  content: 'print("hello")\n',
+                  ...createProjectFile('main.py', 'print("hello")\n'),
                 },
               ],
             },
@@ -161,9 +182,15 @@ describe('RealtimeEventSupportService', () => {
             playerUserId: 'user-1',
             status: 'SUBMITTED',
           },
-          evaluationResult: {
-            executionStatus: 'SUCCESS',
-          },
+      evaluationResult: {
+        feedbackMessage: 'step cleared',
+        detectedIssues: [],
+        strikeCount: 0,
+        remainingStrikeCount: 3,
+        executionSummary: {
+          executionStatus: 'SUCCESS',
+        },
+      },
           occurredAt: '2026-05-22T10:00:01+09:00',
         },
       ],
@@ -173,8 +200,19 @@ describe('RealtimeEventSupportService', () => {
         {
           gameRoomId: 'room-1',
           previousTurnId: 'turn-1',
-          currentTurnId: 'turn-2',
-          currentTurnUserId: 'user-2',
+          missionState: null,
+          turnState: {
+            turnId: 'turn-2',
+            turnNumber: 2,
+            currentPlayerId: 'user-2',
+            startedAt: '2026-05-22T10:00:02+09:00',
+            deadlineAt: '2026-05-22T10:00:32+09:00',
+            timeLimitSeconds: 30,
+            remainingTimeSeconds: 30,
+            status: 'IN_PROGRESS',
+          },
+          nextPlayerId: 'user-2',
+          turnSnapshotId: 'snapshot-1',
           occurredAt: '2026-05-22T10:00:02+09:00',
         },
       ],
@@ -220,12 +258,13 @@ describe('RealtimeEventSupportService', () => {
       },
       missionState: {
         missionId: 'mission-1',
+        title: 'Calculator Relay',
+        description: 'Complete the calculator mission.',
+        language: 'python',
+        difficulty: 'EASY',
         projectStructure: {
           files: [
-            {
-              filePath: 'main.py',
-              content: 'print("hello")\n',
-            },
+            createProjectFile('main.py', 'print("hello")\n'),
           ],
         },
       },
@@ -267,7 +306,13 @@ describe('RealtimeEventSupportService', () => {
         status: 'SUBMITTED',
       },
       evaluationResult: {
-        executionStatus: 'FAILED',
+        feedbackMessage: 'step failed',
+        detectedIssues: [],
+        strikeCount: 1,
+        remainingStrikeCount: 2,
+        executionSummary: {
+          executionStatus: 'FAILED',
+        },
       },
       occurredAt: '2026-05-22T10:00:01+09:00',
     });
@@ -280,7 +325,13 @@ describe('RealtimeEventSupportService', () => {
         status: 'SUBMITTED',
       },
       evaluationResult: {
-        executionStatus: 'FAILED',
+        feedbackMessage: 'step failed',
+        detectedIssues: [],
+        strikeCount: 1,
+        remainingStrikeCount: 2,
+        executionSummary: {
+          executionStatus: 'FAILED',
+        },
       },
       occurredAt: '2026-05-22T10:00:01+09:00',
       aiNotice: {
@@ -321,18 +372,29 @@ describe('RealtimeEventSupportService', () => {
     await service.publishTurnChanged({
       gameRoomId: 'room-1',
       previousTurnId: 'turn-1',
-      currentTurnId: 'turn-2',
-      currentTurnUserId: 'user-2',
       missionState: {
+        title: 'Calculator Relay',
+        description: 'Complete the calculator mission.',
+        language: 'python',
+        difficulty: 'EASY',
         projectStructure: {
           files: [
-            {
-              filePath: 'main.py',
-              content: 'print("next")\n',
-            },
+            createProjectFile('main.py', 'print("next")\n'),
           ],
         },
       },
+      turnState: {
+        turnId: 'turn-2',
+        turnNumber: 2,
+        currentPlayerId: 'user-2',
+        startedAt: '2026-05-22T10:00:02+09:00',
+        deadlineAt: '2026-05-22T10:00:32+09:00',
+        timeLimitSeconds: 30,
+        remainingTimeSeconds: 30,
+        status: 'IN_PROGRESS',
+      },
+      nextPlayerId: 'user-2',
+      turnSnapshotId: 'snapshot-2',
       occurredAt: '2026-05-22T10:00:02+09:00',
     });
 
@@ -366,17 +428,49 @@ describe('RealtimeEventSupportService', () => {
     await service.publishTurnChanged({
       gameRoomId: 'room-1',
       previousTurnId: 'turn-1',
-      currentTurnId: 'turn-2',
-      currentTurnUserId: 'user-2',
+      missionState: null,
+      turnState: {
+        turnId: 'turn-2',
+        turnNumber: 2,
+        currentPlayerId: 'user-2',
+        startedAt: '2026-05-22T10:00:02+09:00',
+        deadlineAt: '2026-05-22T10:00:32+09:00',
+        timeLimitSeconds: 30,
+        remainingTimeSeconds: 30,
+        status: 'IN_PROGRESS',
+      },
+      nextPlayerId: 'user-2',
+      turnSnapshotId: 'snapshot-3',
       occurredAt: '2026-05-22T10:00:02+09:00',
     });
 
     expect(realtimeGateway.emitToRoom).toHaveBeenCalledWith('room-1', 'turn-changed', {
       gameRoomId: 'room-1',
       previousTurnId: 'turn-1',
-      currentTurnId: 'turn-2',
-      currentTurnUserId: 'user-2',
+      missionState: null,
+      turnState: {
+        turnId: 'turn-2',
+        turnNumber: 2,
+        currentPlayerId: 'user-2',
+        startedAt: '2026-05-22T10:00:02+09:00',
+        deadlineAt: '2026-05-22T10:00:32+09:00',
+        timeLimitSeconds: 30,
+        remainingTimeSeconds: 30,
+        status: 'IN_PROGRESS',
+      },
+      nextPlayerId: 'user-2',
+      turnSnapshotId: 'snapshot-3',
       occurredAt: '2026-05-22T10:00:02+09:00',
     });
   });
 });
+
+function createProjectFile(filePath: string, content: string) {
+  return {
+    filePath,
+    content,
+    language: 'python',
+    readonly: false,
+    fileUrl: `data:text/plain;charset=utf-8,${encodeURIComponent(content)}`,
+  };
+}

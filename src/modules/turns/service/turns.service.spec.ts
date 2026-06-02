@@ -25,7 +25,40 @@ describe('TurnsService', () => {
   it('persists snapshot, execution outcome, and next turn on successful submit', async () => {
     const room = createRoom();
     const mission = createMission();
+    mission.projectStructureJson = {
+      ...mission.projectStructureJson,
+      files: [
+        {
+          filePath: 'main.py',
+          language: 'python',
+          fileUrl: 'data:text/plain;charset=utf-8,print(%22old%22)%0A',
+        },
+      ],
+    };
     const currentStep = createCurrentStep();
+    mission.missionTemplate = {
+      id: 'template-1',
+      title: 'Calculator Relay',
+      description: 'Complete the calculator mission.',
+      language: 'python',
+    } as never;
+    mission.steps = [
+      currentStep,
+      {
+        ...currentStep,
+        id: 'step-2',
+        missionTemplateStepId: 'template-step-2',
+        stepOrder: 2,
+        status: GameRoomMissionStepStatus.READY,
+        missionTemplateStep: {
+          ...currentStep.missionTemplateStep,
+          id: 'template-step-2',
+          stepOrder: 2,
+          title: 'Compute result',
+          description: 'Calculate the final answer.',
+        },
+      },
+    ];
     const turn = createTurn();
     const participants = createParticipants();
     const snapshots: TurnSnapshotEntity[] = [];
@@ -51,9 +84,18 @@ describe('TurnsService', () => {
     > = {
       completeCurrentStep: jest.fn().mockResolvedValue({
         mission: {
-          ...mission,
+          id: mission.id,
+          gameRoomId: mission.gameRoomId,
+          missionTemplateId: mission.missionTemplateId,
           currentStepId: 'step-2',
+          containerId: mission.containerId,
           strikeCount: 0,
+          judgePolicyJson: mission.judgePolicyJson,
+          projectStructureJson: mission.projectStructureJson,
+          startedAt: mission.startedAt,
+          finishedAt: mission.finishedAt,
+          createdAt: mission.createdAt,
+          updatedAt: mission.updatedAt,
         },
         clearedStep: {
           ...currentStep,
@@ -71,8 +113,16 @@ describe('TurnsService', () => {
       transitionCurrentStepToInProgress: jest.fn().mockResolvedValue({
         ...currentStep,
         id: 'step-2',
+        missionTemplateStepId: 'template-step-2',
         stepOrder: 2,
         status: GameRoomMissionStepStatus.IN_PROGRESS,
+        missionTemplateStep: {
+          ...currentStep.missionTemplateStep,
+          id: 'template-step-2',
+          stepOrder: 2,
+          title: 'Compute result',
+          description: 'Calculate the final answer.',
+        },
       }),
     };
     const executionsService: jest.Mocked<Pick<ExecutionsService, 'executeTurnCode'>> = {
@@ -139,12 +189,64 @@ describe('TurnsService', () => {
     expect(result.turnChangedEvent).toMatchObject({
       gameRoomId: room.id,
       previousTurnId: turn.id,
-      currentTurnId: 'turn-2',
       nextPlayerId: 'user-2',
+      missionState: {
+        title: 'Calculator Relay',
+        description: 'Complete the calculator mission.',
+        language: 'python',
+        gameRoomMissionStepId: 'step-2',
+        missionTemplateStepId: 'template-step-2',
+        stepOrder: 2,
+        stepTitle: 'Compute result',
+        stepDescription: 'Calculate the final answer.',
+        steps: [
+          expect.objectContaining({
+            gameRoomMissionStepId: 'step-1',
+            title: 'Parse stdin',
+          }),
+          expect.objectContaining({
+            gameRoomMissionStepId: 'step-2',
+            title: 'Compute result',
+            description: 'Calculate the final answer.',
+          }),
+        ],
+      },
+      turnState: {
+        turnId: 'turn-2',
+        turnNumber: 2,
+        currentPlayerId: 'user-2',
+        timeLimitSeconds: room.timeLimitSeconds,
+        remainingTimeSeconds: room.timeLimitSeconds,
+        status: TurnStatus.IN_PROGRESS,
+      },
+    });
+    expect(result.turnChangedEvent?.missionState?.projectStructure.files[0]).toMatchObject({
+      filePath: 'main.py',
+      content: 'print("done")\n',
+      fileUrl: 'data:text/plain;charset=utf-8,print(%22done%22)%0A',
     });
     expect(result.missionResultEvent).toBeNull();
     expect(result.gameStateUpdatedEvent.gameState).toMatchObject({
       status: GameRoomStatus.IN_PROGRESS,
+    });
+    expect(result.gameStateUpdatedEvent.missionState).toMatchObject({
+      title: 'Calculator Relay',
+      description: 'Complete the calculator mission.',
+      language: 'python',
+      gameRoomMissionStepId: 'step-2',
+      missionTemplateStepId: 'template-step-2',
+      stepOrder: 2,
+      stepTitle: 'Compute result',
+      stepDescription: 'Calculate the final answer.',
+      projectStructure: {
+        files: [
+          expect.objectContaining({
+            filePath: 'main.py',
+            content: 'print("done")\n',
+            fileUrl: 'data:text/plain;charset=utf-8,print(%22done%22)%0A',
+          }),
+        ],
+      },
     });
   });
 
@@ -1345,6 +1447,16 @@ describe('TurnsService', () => {
     expect(missionResultsService.createMissionResult).toHaveBeenCalledWith(
       expect.objectContaining({
         judgeStatus: MissionResultJudgeStatus.PASSED,
+        resultPayloadJson: expect.objectContaining({
+          feedbackMessage: expect.any(String),
+          detectedIssues: [],
+          strikeCount: 0,
+          remainingStrikeCount: room.maxStrikeCount,
+          executionSummary: expect.objectContaining({
+            status: ExecutionStatus.SUCCESS,
+            exitCode: 0,
+          }),
+        }),
       }),
     );
   });
@@ -1446,6 +1558,8 @@ function createCurrentStep(): GameRoomMissionStepEntity {
       id: 'template-step-1',
       missionTemplateId: 'template-1',
       stepOrder: 1,
+      title: 'Parse stdin',
+      description: 'Read the three input lines.',
       targetFilePath: 'main.py',
       successCriteria: 'Print the expected calculator result.',
       judgePolicyJson: {},
@@ -1499,6 +1613,10 @@ function createManager(input: {
   participants: GameRoomParticipantEntity[];
   snapshots: TurnSnapshotEntity[];
 }) {
+  const missionSteps = Array.isArray(input.mission.steps) && input.mission.steps.length > 0
+    ? input.mission.steps
+    : [input.currentStep];
+
   return {
     query: jest.fn(),
     getRepository: jest.fn((entity) => {
@@ -1523,9 +1641,19 @@ function createManager(input: {
       if (entity === GameRoomMissionStepEntity) {
         return {
           findOne: jest.fn(async ({ where }) =>
-            where.id === input.currentStep.id ? input.currentStep : null,
+            missionSteps.find((step) => step.id === where.id) ?? null,
           ),
-          save: jest.fn(async (value) => Object.assign(input.currentStep, value)),
+          save: jest.fn(async (value) => {
+            const existing = missionSteps.find((step) => step.id === value.id);
+
+            if (existing) {
+              Object.assign(existing, value);
+              return existing;
+            }
+
+            missionSteps.push(value);
+            return value;
+          }),
         };
       }
 

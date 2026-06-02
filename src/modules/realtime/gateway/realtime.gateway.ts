@@ -148,6 +148,7 @@ export class RealtimeGateway implements OnGatewayDisconnect {
       const codeUpdatedEvent: CodeUpdatedEvent = {
         gameRoomId: session.gameRoomId,
         userId: session.userId,
+        sessionId: payload.sessionId,
         filePath: payload.filePath,
         content: payload.content,
         occurredAt,
@@ -180,19 +181,24 @@ export class RealtimeGateway implements OnGatewayDisconnect {
         gameRoomId: session.gameRoomId,
       });
 
-      if (!currentTurnState?.currentTurnId || currentTurnState.currentTurnUserId !== session.userId) {
+      if (
+        !currentTurnState?.currentTurnId ||
+        currentTurnState.currentTurnId !== payload.turnId ||
+        currentTurnState.currentTurnUserId !== session.userId ||
+        payload.userId !== session.userId
+      ) {
         return;
       }
 
       await this.turnSubmitService.submitTurn({
         gameRoomId: session.gameRoomId,
-        turnId: currentTurnState.currentTurnId,
+        turnId: payload.turnId,
         userId: session.userId,
-        occurredAt: payload.occurredAt ?? toSeoulIso(new Date()),
+        occurredAt: payload.submittedAt,
         files: await this.collectTurnSubmitFiles(
           payload,
           session.gameRoomId,
-          currentTurnState.currentTurnId,
+          payload.turnId,
           session.userId,
         ),
       });
@@ -333,6 +339,7 @@ export class RealtimeGateway implements OnGatewayDisconnect {
     gameRoomId: string,
     event: string,
     data:
+      | RoomParticipantsUpdatedEvent
       | CodeUpdatedEvent
       | GameStartedEvent
       | TurnSubmitEvent
@@ -411,19 +418,20 @@ export class RealtimeGateway implements OnGatewayDisconnect {
   }
 
   private isValidTurnSubmitPayload(payload: TurnSubmitPayload | undefined): payload is TurnSubmitPayload {
-    if (!this.hasText(payload?.gameRoomId)) {
+    if (
+      !this.hasText(payload?.gameRoomId) ||
+      !this.hasText(payload.userId) ||
+      !this.hasText(payload.turnId) ||
+      !this.hasText(payload.submittedAt)
+    ) {
       return false;
     }
 
-    if (payload.files === undefined) {
-      return true;
-    }
-
-    if (!Array.isArray(payload.files)) {
+    if (!payload.codeSnapshot || !Array.isArray(payload.codeSnapshot.files)) {
       return false;
     }
 
-    return payload.files.every(
+    return payload.codeSnapshot.files.every(
       (file) => this.hasText(file.filePath) && typeof file.content === 'string',
     );
   }
@@ -442,14 +450,14 @@ export class RealtimeGateway implements OnGatewayDisconnect {
       bufferedFiles.map((file) => [file.filePath, file] as const),
     );
 
-    for (const file of payload.files ?? []) {
+    for (const file of payload.codeSnapshot.files) {
       filesByPath.set(file.filePath, {
         gameRoomId,
         turnId,
         userId,
         filePath: file.filePath,
         content: file.content,
-        occurredAt: payload.occurredAt ?? toSeoulIso(new Date()),
+        occurredAt: payload.submittedAt,
       });
     }
 
