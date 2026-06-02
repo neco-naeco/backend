@@ -156,14 +156,119 @@ Payload shape must follow the API spec as the external contract.
 Payload-specific contract notes:
 
 - `game-started` must include gameplay-entry state for the initial editor.
+- `game-started.missionState` must include:
+  - `title: string`
+  - `description: string`
+  - `language: string`
+  - `difficulty: string`
 - `game-started.missionState.projectStructure.files[*]` must include:
   - `filePath: string`
   - `language: string`
   - `readonly: boolean`
   - `fileUrl: string`
 - `fileUrl` is a presigned or public URL that the client fetches to load the initial file content.
+- `room-participants-updated` must always include:
+  - `participants: array`
+  - `changedParticipant: object | null`
+- `changedParticipant` may be `null` only when the broadcast represents a full-state refresh without one specific participant transition to highlight.
 - `code-change` uses whole-file synchronization payloads with `content: string`, not `codeDelta`.
 - `code-updated` uses whole-file synchronization payloads with `content: string`, not `codeDelta`.
+- `turn-submit` uses `{ gameRoomId, userId, turnId, codeSnapshot, submittedAt }` as the external client payload.
+- `turn-changed` must include a full `turnState` payload for the next active turn.
+- `turn-evaluated.evaluationResult` must include:
+  - `feedbackMessage: string`
+  - `detectedIssues: array`
+  - `strikeCount: number`
+  - `remainingStrikeCount: number`
+  - `executionSummary: object`
+
+Canonical event payload summaries:
+
+### `room-participants-updated` (Server -> Client)
+
+- `gameRoomId: string`
+- `participants: array`
+- `changedParticipant: object | null`
+- `gameState: object`
+- `missionState: object | null`
+- `occurredAt: string`
+
+### `game-started` (Server -> Client)
+
+- `gameRoomId: string`
+- `gameState: object`
+- `missionState: object`
+  - `title: string`
+  - `description: string`
+  - `language: string`
+  - `difficulty: string`
+  - `projectStructure.files[*]`
+- `uiHints: object`
+- `occurredAt: string`
+
+### `code-change` (Client -> Server)
+
+- `gameRoomId: string`
+- `userId: string`
+- `sessionId: string`
+- `filePath: string`
+- `content: string`
+- `occurredAt: string`
+
+### `code-updated` (Server -> Client)
+
+- `gameRoomId: string`
+- `userId: string`
+- `filePath: string`
+- `content: string`
+- `occurredAt: string`
+
+Optional field:
+
+- `sessionId?: string`
+  - allowed only when the frontend contract needs echo suppression
+
+### `turn-submit` (Client -> Server)
+
+- `gameRoomId: string`
+- `userId: string`
+- `turnId: string`
+- `codeSnapshot: object`
+  - `files[*].filePath: string`
+  - `files[*].content: string`
+- `submittedAt: string`
+
+### `turn-evaluated` (Server -> Client)
+
+- `gameRoomId: string`
+- `evaluatedTurn: object`
+- `evaluationResult: object`
+  - `feedbackMessage: string`
+  - `detectedIssues[*].issueType: string`
+  - `detectedIssues[*].message: string`
+  - `detectedIssues[*].filePath: string`
+  - `detectedIssues[*].lineNumber?: number`
+  - `strikeCount: number`
+  - `remainingStrikeCount: number`
+  - `executionSummary: object`
+- `occurredAt: string`
+
+### `turn-changed` (Server -> Client)
+
+- `gameRoomId: string`
+- `missionState: object`
+- `turnState: object`
+  - `turnId: string`
+  - `turnNumber: number`
+  - `currentPlayerId: string`
+  - `startedAt: string`
+  - `deadlineAt: string`
+  - `timeLimitSeconds: number`
+  - `remainingTimeSeconds: number`
+  - `status: string`
+- `nextPlayerId: string`
+- `turnSnapshotId: string`
+- `occurredAt: string`
 
 ## WebSocket Close Codes
 

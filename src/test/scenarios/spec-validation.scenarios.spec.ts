@@ -7,6 +7,7 @@ import { ConfigService } from '@nestjs/config';
 import { ConflictException, ForbiddenException } from '@nestjs/common';
 import { DataSource, EntityManager } from 'typeorm';
 import { of, lastValueFrom } from 'rxjs';
+import WebSocket from 'ws';
 import { GameRoomEntity } from '@modules/game-rooms/entity/game-room.entity';
 import { GameRoomsService } from '@modules/game-rooms/service/game-rooms.service';
 import { GameRoomsController } from '@modules/game-rooms/controller/game-rooms.controller';
@@ -16,6 +17,7 @@ import { GameRoomParticipantEntity } from '@modules/game-room-participants/entit
 import { GameRoomParticipantsService } from '@modules/game-room-participants/service/game-room-participants.service';
 import { GameRoomMissionStepEntity } from '@modules/game-room-missions/entity/game-room-mission-step.entity';
 import { GameRoomMissionEntity } from '@modules/game-room-missions/entity/game-room-mission.entity';
+import { MissionTemplateEntity } from '@modules/game-room-missions/entity/mission-template.entity';
 import { ExecutionsService } from '@modules/executions/service/executions.service';
 import { MissionResultsService } from '@modules/mission-results/service/mission-results.service';
 import { TurnEntity } from '@modules/turns/entity/turn.entity';
@@ -24,11 +26,13 @@ import { TurnsService } from '@modules/turns/service/turns.service';
 import { DatabaseRealtimeRoomAccessService } from '@modules/realtime/service/realtime-room-access.service';
 import { DatabaseRealtimeDisconnectService } from '@modules/realtime/service/realtime-disconnect.service';
 import { DefaultRealtimeTurnSubmitService } from '@modules/realtime/service/realtime-defaults.service';
+import { RealtimeGateway } from '@modules/realtime/gateway/realtime.gateway';
 import { RealtimeRoomStateService } from '@modules/realtime/service/realtime-room-state.service';
 import {
   ExecutionStatus,
   GameRoomMissionStepStatus,
   GameRoomParticipantMembershipStatus,
+  GameRoomParticipantRole,
   GameRoomStatus,
   MissionResultJudgeStatus,
   TurnStatus,
@@ -36,6 +40,14 @@ import {
 import { ExecutionEntity } from '@modules/executions/entity/execution.entity';
 import type { TurnLifecycleResult } from '@modules/turns/service/turns.service';
 import { ResponseInterceptor } from '@common/interceptors/response.interceptor';
+import type {
+  RealtimeAuthService,
+  RealtimeDisconnectService,
+  RealtimeRoomAccessService,
+  RealtimeSupportStateStore,
+  RealtimeTurnEditService,
+  RealtimeTurnSubmitService,
+} from '@modules/realtime/service/realtime.interfaces';
 
 describe('Spec validation scenarios (docs/specs/08-security-testing-and-delivery.md)', () => {
   describe('documented HTTP success contracts', () => {
@@ -82,6 +94,343 @@ describe('Spec validation scenarios (docs/specs/08-security-testing-and-delivery
         error: null,
       });
       expect(request.requestId).toEqual(expect.any(String));
+    });
+  });
+
+  describe('documented realtime payload contracts', () => {
+    it('publishes game-started with mission metadata and initial file bootstrap fields', async () => {
+      const realtimeEventSupportService = {
+        publishGameStarted: jest.fn().mockResolvedValue(undefined),
+        publishGameStateUpdated: jest.fn().mockResolvedValue(undefined),
+      };
+      const service = new GameStartFlowService(
+        {
+          startGame: jest.fn().mockResolvedValue({
+            gameRoom: createScenarioRoom(),
+            gameRoomMission: {
+              ...createScenarioMission(),
+              missionTemplate: {
+                title: 'Calculator Relay',
+                description: 'Complete the calculator mission.',
+                language: 'python',
+              },
+            },
+            currentTurn: createScenarioTurn(),
+            currentStep: createScenarioCurrentStep(),
+          }),
+        } as unknown as GameRoomsService,
+        realtimeEventSupportService as never,
+      );
+
+      await service.startGame({
+        actorUserId: 'user-1',
+        gameRoomId: 'room-1',
+        missionTemplateId: 'template-1',
+      });
+
+      expect(realtimeEventSupportService.publishGameStarted).toHaveBeenCalledWith(
+        expect.objectContaining({
+          gameRoomId: 'room-1',
+          missionState: expect.objectContaining({
+            missionId: 'mission-1',
+            missionTemplateId: 'template-1',
+            currentStepId: 'step-1',
+            currentStepStatus: GameRoomMissionStepStatus.IN_PROGRESS,
+            gameRoomMissionStepId: 'step-1',
+            missionTemplateStepId: 'template-step-1',
+            stepOrder: 1,
+            stepTitle: 'Parse stdin',
+            stepDescription: 'Read the three input lines.',
+            title: 'Calculator Relay',
+            description: 'Complete the calculator mission.',
+            language: 'python',
+            difficulty: 'EASY',
+            projectStructure: expect.objectContaining({
+              files: [
+                expect.objectContaining({
+                  filePath: 'main.py',
+                  language: 'python',
+                  readonly: false,
+                  fileUrl: expect.stringContaining('data:text/plain'),
+                }),
+              ],
+            }),
+          }),
+        }),
+      );
+    });
+
+    it('builds room-participants-updated with participants, changedParticipant, and post-start mission state', async () => {
+      const room = createScenarioRoom();
+      const participantRepository = {
+        find: jest.fn().mockResolvedValue([
+          {
+            id: 'participant-1',
+            gameRoomId: room.id,
+            userId: 'user-1',
+            role: GameRoomParticipantRole.OWNER,
+            membershipStatus: GameRoomParticipantMembershipStatus.JOINED,
+            createdAt: new Date('2026-05-27T10:00:00.000Z'),
+          },
+          {
+            id: 'participant-2',
+            gameRoomId: room.id,
+            userId: 'user-2',
+            role: GameRoomParticipantRole.PARTICIPANT,
+            membershipStatus: GameRoomParticipantMembershipStatus.JOINED,
+            createdAt: new Date('2026-05-27T10:00:01.000Z'),
+          },
+        ]),
+      };
+      const userRepository = {
+        find: jest.fn().mockResolvedValue([
+          { id: 'user-1', nickname: 'owner' },
+          { id: 'user-2', nickname: 'watcher' },
+        ]),
+      };
+      const missionRepository = {
+        findOne: jest.fn().mockResolvedValue({
+          ...createScenarioMission(),
+          missionTemplate: {
+            title: 'Calculator Relay',
+            description: 'Complete the calculator mission.',
+            language: 'python',
+          },
+        }),
+      };
+      const missionTemplateRepository = {
+        findOne: jest.fn().mockResolvedValue({
+          id: 'template-1',
+          title: 'Calculator Relay',
+          description: 'Complete the calculator mission.',
+          language: 'python',
+        }),
+      };
+      const currentStepRepository = {
+        find: jest.fn().mockResolvedValue([createScenarioCurrentStep()]),
+        findOne: jest.fn().mockResolvedValue(createScenarioCurrentStep()),
+      };
+      const turnRepository = {
+        findOne: jest.fn().mockResolvedValue(createScenarioTurn()),
+      };
+      const roomRepository = {
+        findOne: jest.fn().mockResolvedValue(room),
+      };
+      const dataSource = {
+        getRepository: jest.fn((entity: unknown) => {
+          if (entity === GameRoomEntity) {
+            return roomRepository;
+          }
+          if (entity === GameRoomParticipantEntity) {
+            return participantRepository;
+          }
+          if (entity === GameRoomMissionEntity) {
+            return missionRepository;
+          }
+          if (entity === MissionTemplateEntity) {
+            return missionTemplateRepository;
+          }
+          if (entity === GameRoomMissionStepEntity) {
+            return currentStepRepository;
+          }
+          if (entity === TurnEntity) {
+            return turnRepository;
+          }
+
+          return userRepository;
+        }),
+      };
+      const roomStateService = new RealtimeRoomStateService(
+        dataSource as unknown as DataSource,
+      );
+
+      const event = await roomStateService.buildParticipantsUpdatedEvent({
+        gameRoomId: room.id,
+        changedUserId: 'user-2',
+        occurredAt: '2026-05-27T10:00:10+09:00',
+      });
+
+      expect(event).toMatchObject({
+        gameRoomId: 'room-1',
+        participants: [
+          expect.objectContaining({
+            userId: 'user-1',
+            nickname: 'owner',
+            membershipStatus: GameRoomParticipantMembershipStatus.JOINED,
+          }),
+          expect.objectContaining({
+            userId: 'user-2',
+            nickname: 'watcher',
+            membershipStatus: GameRoomParticipantMembershipStatus.JOINED,
+          }),
+        ],
+        changedParticipant: expect.objectContaining({
+          userId: 'user-2',
+          nickname: 'watcher',
+        }),
+        gameState: expect.objectContaining({
+          status: GameRoomStatus.IN_PROGRESS,
+          turnState: expect.objectContaining({
+            turnId: 'turn-1',
+            currentPlayerId: 'user-1',
+          }),
+        }),
+        missionState: expect.objectContaining({
+          missionId: 'mission-1',
+          missionTemplateId: 'template-1',
+          currentStepId: 'step-1',
+          currentStepStatus: GameRoomMissionStepStatus.IN_PROGRESS,
+          gameRoomMissionStepId: 'step-1',
+          missionTemplateStepId: 'template-step-1',
+          stepOrder: 1,
+          stepTitle: 'Parse stdin',
+          stepDescription: 'Read the three input lines.',
+          steps: [
+            expect.objectContaining({
+              gameRoomMissionStepId: 'step-1',
+              missionTemplateStepId: 'template-step-1',
+              stepOrder: 1,
+              title: 'Parse stdin',
+              description: 'Read the three input lines.',
+              status: GameRoomMissionStepStatus.IN_PROGRESS,
+            }),
+          ],
+          title: 'Calculator Relay',
+          description: 'Complete the calculator mission.',
+          language: 'python',
+          difficulty: 'EASY',
+          projectStructure: expect.objectContaining({
+            files: [
+              expect.objectContaining({
+                filePath: 'main.py',
+                language: 'python',
+                readonly: false,
+                fileUrl: expect.stringContaining('data:text/plain'),
+              }),
+            ],
+          }),
+        }),
+        occurredAt: '2026-05-27T10:00:10+09:00',
+      });
+
+      await expect(
+        roomStateService.buildParticipantsUpdatedEvent({
+          gameRoomId: room.id,
+          occurredAt: '2026-05-27T10:00:11+09:00',
+        }),
+      ).resolves.toMatchObject({
+        gameRoomId: 'room-1',
+        changedParticipant: null,
+        occurredAt: '2026-05-27T10:00:11+09:00',
+      });
+    });
+
+    it('fans out code-updated with whole-file content and optional sessionId', async () => {
+      const gateway = new RealtimeGateway(
+        {
+          validateAccessToken: jest
+            .fn()
+            .mockResolvedValueOnce({ userId: 'user-1' })
+            .mockResolvedValueOnce({ userId: 'user-2' }),
+        } as jest.Mocked<RealtimeAuthService>,
+        {
+          getJoinRoomState: jest.fn().mockResolvedValue({
+            gameRoomId: 'room-1',
+            initialState: {
+              gameRoomId: 'room-1',
+              participants: [
+                {
+                  userId: 'user-1',
+                  nickname: 'owner',
+                  role: GameRoomParticipantRole.OWNER,
+                  membershipStatus: GameRoomParticipantMembershipStatus.JOINED,
+                },
+              ],
+              changedParticipant: null,
+              gameState: { status: GameRoomStatus.WAITING },
+              missionState: null,
+              occurredAt: '2026-05-27T10:00:00+09:00',
+            },
+          }),
+        } as jest.Mocked<RealtimeRoomAccessService>,
+        {
+          handleDisconnect: jest.fn().mockResolvedValue(undefined),
+        } as jest.Mocked<RealtimeDisconnectService>,
+        {
+          authorizeCodeChange: jest.fn().mockResolvedValue({
+            isEditable: true,
+            currentTurnId: 'turn-1',
+            currentTurnUserId: 'user-1',
+          }),
+        } as jest.Mocked<RealtimeTurnEditService>,
+        {
+          submitTurn: jest.fn(),
+        } as jest.Mocked<RealtimeTurnSubmitService>,
+        {
+          saveCurrentTurnState: jest.fn().mockResolvedValue(undefined),
+          getCurrentTurnState: jest.fn(),
+          saveLatestFileContent: jest.fn().mockResolvedValue(undefined),
+          getLatestFileContent: jest.fn(),
+          listLatestFileContents: jest.fn(),
+          clearLatestFileContents: jest.fn(),
+        } as jest.Mocked<RealtimeSupportStateStore>,
+      );
+      const ownerSocket = createGatewaySocket();
+      const watcherSocket = createGatewaySocket();
+
+      await gateway.handleJoinRoom(ownerSocket, {
+        accessToken: 'owner-token',
+        gameRoomId: 'room-1',
+      });
+      await gateway.handleJoinRoom(watcherSocket, {
+        accessToken: 'watcher-token',
+        gameRoomId: 'room-1',
+      });
+      await gateway.handleCodeChange(ownerSocket, {
+        gameRoomId: 'room-1',
+        userId: 'forged-user-id',
+        sessionId: 'session-1',
+        filePath: 'main.py',
+        content: 'print("hello")\n',
+      });
+
+      const watcherSend = watcherSocket.send as unknown as jest.Mock;
+      const watcherMessages = watcherSend.mock.calls.map(([payload]) =>
+        JSON.parse(payload as string),
+      );
+
+      expect(watcherMessages).toContainEqual({
+        event: 'code-updated',
+        data: {
+          gameRoomId: 'room-1',
+          userId: 'user-1',
+          sessionId: 'session-1',
+          filePath: 'main.py',
+          content: 'print("hello")\n',
+          occurredAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+        },
+      });
+
+      await gateway.handleCodeChange(ownerSocket, {
+        gameRoomId: 'room-1',
+        userId: 'forged-user-id',
+        filePath: 'main.py',
+        content: 'print("without-session")\n',
+      });
+
+      const updatedWatcherMessages = watcherSend.mock.calls.map(([payload]) =>
+        JSON.parse(payload as string),
+      );
+      expect(updatedWatcherMessages).toContainEqual({
+        event: 'code-updated',
+        data: {
+          gameRoomId: 'room-1',
+          userId: 'user-1',
+          filePath: 'main.py',
+          content: 'print("without-session")\n',
+          occurredAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+        },
+      });
     });
   });
 
@@ -471,6 +820,14 @@ describe('Spec validation scenarios (docs/specs/08-security-testing-and-delivery
 
       expect(lifecycle.evaluatedEvent.evaluationResult).toMatchObject({
         judgeStatus: MissionResultJudgeStatus.PASSED,
+        feedbackMessage: expect.any(String),
+        detectedIssues: [],
+        strikeCount: 0,
+        remainingStrikeCount: 3,
+        executionSummary: expect.objectContaining({
+          status: ExecutionStatus.SUCCESS,
+          exitCode: 0,
+        }),
         stepOrder: 1,
         stepJudgingSummary: {
           totalCases: 2,
@@ -488,6 +845,18 @@ describe('Spec validation scenarios (docs/specs/08-security-testing-and-delivery
         }),
       );
       expect(lifecycle.turnChangedEvent).not.toBeNull();
+      expect(lifecycle.turnChangedEvent).toMatchObject({
+        turnState: {
+          turnId: expect.any(String),
+          turnNumber: 2,
+          currentPlayerId: 'user-2',
+          startedAt: expect.any(String),
+          deadlineAt: expect.any(String),
+          timeLimitSeconds: 30,
+          remainingTimeSeconds: 30,
+          status: TurnStatus.IN_PROGRESS,
+        },
+      });
     });
 
     it('increments strike and explains stdout mismatch without AI judgment', async () => {
@@ -525,7 +894,12 @@ describe('Spec validation scenarios (docs/specs/08-security-testing-and-delivery
 
       expect(lifecycle.evaluatedEvent.evaluationResult).toMatchObject({
         judgeStatus: MissionResultJudgeStatus.FAILED,
+        feedbackMessage: expect.any(String),
         strikeCount: 1,
+        remainingStrikeCount: 2,
+        executionSummary: expect.objectContaining({
+          status: ExecutionStatus.SUCCESS,
+        }),
         detectedIssues: [
           expect.objectContaining({
             issueType: 'PUBLIC_TEST_CASE_FAILED',
@@ -839,6 +1213,11 @@ function createScenarioMission(): GameRoomMissionEntity {
       entryFilePath: 'main.py',
       files: [{ filePath: 'main.py', language: 'python' }],
     },
+    missionTemplate: {
+      title: 'Calculator Relay',
+      description: 'Complete the calculator mission.',
+      language: 'python',
+    },
   } as unknown as GameRoomMissionEntity;
 }
 
@@ -851,6 +1230,8 @@ function createScenarioCurrentStep(): GameRoomMissionStepEntity {
     status: GameRoomMissionStepStatus.IN_PROGRESS,
     missionTemplateStep: {
       id: 'template-step-1',
+      title: 'Parse stdin',
+      description: 'Read the three input lines.',
       targetFilePath: 'main.py',
     },
   } as GameRoomMissionStepEntity;
@@ -992,4 +1373,12 @@ function createScenarioTurnManager(input: {
     }),
     query: jest.fn(),
   };
+}
+
+function createGatewaySocket(): WebSocket {
+  return {
+    readyState: WebSocket.OPEN,
+    send: jest.fn(),
+    close: jest.fn(),
+  } as unknown as WebSocket;
 }

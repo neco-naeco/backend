@@ -156,6 +156,16 @@
 - `RealtimeEventSupportService`를 사용하면 assistive notice 실패를 swallow하면서 canonical `turn-evaluated`/`turn-changed`/`game-state-updated`/`mission-result` emission을 일관되게 재사용할 수 있습니다.
 - unchanged starter code submit을 위해 client 또는 authoritative caller는 `turn-submit.files[*]` whole-file payload를 전달할 수 있습니다.
 
+> Superseded on 2026-06-01 by `docs/plans/realtime-contract-alignment-plan.md` Task 1 and `docs/specs/05-api-and-realtime.md`.
+> Canonical external websocket submit contract is now `{ gameRoomId, userId, turnId, codeSnapshot, submittedAt }`.
+> Any `turn-submit.files` handling described below should be treated as an internal fallback idea only, not as the public contract.
+>
+> Task 6 follow-up note on 2026-06-01:
+> Treat every remaining `turn-submit.files` mention in this historical entry as closed and superseded.
+> The only canonical client payload is `turn-submit.codeSnapshot.files[*]`.
+> If unchanged starter code still needs baseline seeding or merge behavior, keep that inside the authoritative submit pipeline and do not reopen it as a transport-contract question.
+> This superseding note overrides any later bullet in the same historical entry that still reads as if `turn-submit.files` were undecided.
+
 **Design decisions made:**
 - **submit payload whole-file fallback**: current turn buffer가 비어 있어도 untouched starter code를 snapshot으로 넘길 수 있게 `turn-submit.files`를 추가했습니다.
 - **best-effort support-state sync**: Redis/support-state layer failure가 authoritative turn completion을 막지 않게 broadcast 이전 sync/clear를 warning-only로 낮췄습니다.
@@ -184,4 +194,6 @@
 - shared `C4`에서 `REALTIME_TURN_SUBMIT_SERVICE`를 실제 authoritative service로 override하고, 그 안에서 `turn_snapshots` 저장 후 `ExecutionsService.executeTurnCode()`를 호출할 것
 - `RealtimeEventSupportService.publishTurnChanged()`가 previous turn buffer를 clear하므로, authoritative submit path는 그 전에 snapshot persistence를 완료할 것
 - `turn-submit.files`를 client contract로 유지할지 여부를 먼저 결정하고, 유지하지 않으면 baseline file fetch/seed 대안을 같은 단계에서 함께 구현할 것
+
+> Superseded on 2026-06-01: `turn-submit.files` is not the canonical client contract. Downstream work should align transport payloads to `codeSnapshot.files[*]` under the canonical `turn-submit` shape and treat any extra submit-file merge path as an internal implementation detail if it remains necessary.
 - `RealtimeEventSupportService`의 assistive notice는 비권위 정보만 담아야 하며, final room/turn/mission state는 항상 upstream authoritative service가 계산해야 합니다.

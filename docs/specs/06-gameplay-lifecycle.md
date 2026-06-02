@@ -121,6 +121,7 @@ Persistence points:
 ## Turn Submission and Judgment Pipeline
 
 1. the current player sends `turn-submit`
+   - external request payload: `{ gameRoomId, userId, turnId, codeSnapshot, submittedAt }`
 2. the server validates player identity and turn status
 3. the latest code snapshot is stored
 4. the turn status becomes `SUBMITTED`
@@ -132,6 +133,7 @@ Persistence points:
 10. AI-generated test input creation and AI-generated result analysis are optional assistive stages around the core execution path
 11. AI feedback may be generated if needed
 12. `turn-evaluated` is broadcast
+   - `evaluationResult` is treated as a full frontend-facing result payload, including `feedbackMessage`, `detectedIssues`, `strikeCount`, `remainingStrikeCount`, and `executionSummary`
 
 Outcomes:
 
@@ -156,6 +158,7 @@ After `turn-evaluated`, the server:
 - creates the next turn
 - finalizes the previous turn
 - broadcasts `turn-changed`
+- `turn-changed.turnState` must carry the complete next-turn state required by the client timer and editor handoff
 
 The game continues to the next turn unless strike limits or mission completion end it.
 
