@@ -2,12 +2,16 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { User } from '@modules/auth/entity/user.entity';
 import { DataSource, EntityManager, In, Repository } from 'typeorm';
 import { GameRoomEntity } from '@modules/game-rooms/entity/game-room.entity';
 import { toSeoulIso } from '@common/utils/date.util';
+import { RealtimeEventSupportService } from '@modules/realtime/service/realtime-event-support.service';
+import { RealtimeRoomStateService } from '@modules/realtime/service/realtime-room-state.service';
 import { GameRoomParticipantEntity } from '../entity/game-room-participant.entity';
 import {
   GameRoomParticipantMembershipStatus,
@@ -69,7 +73,12 @@ const ALLOWED_MEMBERSHIP_TRANSITIONS: Record<
 
 @Injectable()
 export class GameRoomParticipantsService {
-  constructor(private readonly dataSource: DataSource) {}
+  private readonly logger = new Logger(GameRoomParticipantsService.name);
+
+  constructor(
+    private readonly dataSource: DataSource,
+    private readonly moduleRef?: ModuleRef,
+  ) {}
 
   async listParticipantsForUser(input: {
     authenticatedUserId: string;
@@ -163,7 +172,7 @@ export class GameRoomParticipantsService {
   async inviteParticipants(
     input: InviteParticipantsInput,
   ): Promise<GameRoomParticipantEntity[]> {
-    return this.dataSource.transaction(async (manager) => {
+    const participants = await this.dataSource.transaction(async (manager) => {
       const invitedUserIds = [...new Set(input.invitedUserIds)];
 
       if (invitedUserIds.length === 0) {
@@ -223,12 +232,19 @@ export class GameRoomParticipantsService {
 
       return participantRepository.save(participantsToCreate);
     });
+
+    await this.publishParticipantsUpdatedBestEffort({
+      gameRoomId: input.gameRoomId,
+      changedUserId: participants.length === 1 ? participants[0].userId : undefined,
+    });
+
+    return participants;
   }
 
   async acceptInvitation(
     input: ProcessInvitationInput,
   ): Promise<GameRoomParticipantEntity> {
-    return this.dataSource.transaction(async (manager) => {
+    const participant = await this.dataSource.transaction(async (manager) => {
       const participantRepository = manager.getRepository(GameRoomParticipantEntity);
       const lockedParticipant = await this.getParticipantOrThrow(
         participantRepository,
@@ -259,12 +275,19 @@ export class GameRoomParticipantsService {
 
       return participantRepository.save(participant);
     });
+
+    await this.publishParticipantsUpdatedBestEffort({
+      gameRoomId: participant.gameRoomId,
+      changedUserId: participant.userId,
+    });
+
+    return participant;
   }
 
   async denyInvitation(
     input: ProcessInvitationInput,
   ): Promise<GameRoomParticipantEntity> {
-    return this.dataSource.transaction(async (manager) => {
+    const participant = await this.dataSource.transaction(async (manager) => {
       const participantRepository = manager.getRepository(GameRoomParticipantEntity);
       const lockedParticipant = await this.getParticipantOrThrow(
         participantRepository,
@@ -290,13 +313,20 @@ export class GameRoomParticipantsService {
 
       return participantRepository.save(participant);
     });
+
+    await this.publishParticipantsUpdatedBestEffort({
+      gameRoomId: participant.gameRoomId,
+      changedUserId: participant.userId,
+    });
+
+    return participant;
   }
 
   async markJoinedParticipantLeftOnDisconnect(input: {
     gameRoomId: string;
     userId: string;
   }): Promise<DisconnectMembershipResult> {
-    return this.dataSource.transaction(async (manager) => {
+    const result = await this.dataSource.transaction(async (manager) => {
       const participantRepository = manager.getRepository(GameRoomParticipantEntity);
       const gameRoomRepository = manager.getRepository(GameRoomEntity);
 
@@ -341,10 +371,19 @@ export class GameRoomParticipantsService {
         joinedParticipantCount,
       };
     });
+
+    if (result.membershipChanged) {
+      await this.publishParticipantsUpdatedBestEffort({
+        gameRoomId: input.gameRoomId,
+        changedUserId: input.userId,
+      });
+    }
+
+    return result;
   }
 
   async leaveRoom(input: LeaveRoomInput): Promise<GameRoomParticipantEntity> {
-    return this.dataSource.transaction(async (manager) => {
+    const participant = await this.dataSource.transaction(async (manager) => {
       const participantRepository = manager.getRepository(GameRoomParticipantEntity);
       const lockedParticipant = await this.getParticipantOrThrow(
         participantRepository,
@@ -369,6 +408,48 @@ export class GameRoomParticipantsService {
 
       return participantRepository.save(participant);
     });
+
+    await this.publishParticipantsUpdatedBestEffort({
+      gameRoomId: participant.gameRoomId,
+      changedUserId: participant.userId,
+    });
+
+    return participant;
+  }
+
+  private async publishParticipantsUpdatedBestEffort(input: {
+    gameRoomId: string;
+    changedUserId?: string;
+  }): Promise<void> {
+    if (!this.moduleRef) {
+      return;
+    }
+
+    try {
+      const realtimeRoomStateService = this.moduleRef.get(RealtimeRoomStateService, {
+        strict: false,
+      });
+      const realtimeEventSupportService = this.moduleRef.get(
+        RealtimeEventSupportService,
+        {
+          strict: false,
+        },
+      );
+      const event = await realtimeRoomStateService.buildParticipantsUpdatedEvent({
+        gameRoomId: input.gameRoomId,
+        changedUserId: input.changedUserId,
+      });
+
+      realtimeEventSupportService.publishRoomParticipantsUpdated(event);
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'unknown participants realtime publish error';
+      this.logger.warn(
+        `Failed to publish room-participants-updated for ${input.gameRoomId}: ${message}`,
+      );
+    }
   }
 
   private async getRoomOrThrow(

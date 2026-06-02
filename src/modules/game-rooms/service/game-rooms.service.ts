@@ -194,6 +194,11 @@ export class GameRoomsService {
             roomDifficulty: gameRoom.difficulty,
             missionTemplateId: input.missionTemplateId,
           });
+        gameRoomMission.missionTemplate =
+          await this.gameRoomMissionsService.validateMissionTemplateSelection(
+            gameRoom.difficulty,
+            input.missionTemplateId,
+          );
         preparedRuntimeContainerId = gameRoomMission.containerId;
 
         const currentTurn = await this.turnsService.createInitialTurn({

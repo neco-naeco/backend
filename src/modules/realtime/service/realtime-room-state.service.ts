@@ -3,6 +3,7 @@ import { toSeoulIso } from '@common/utils/date.util';
 import { User } from '@modules/auth/entity/user.entity';
 import { GameRoomMissionStepEntity } from '@modules/game-room-missions/entity/game-room-mission-step.entity';
 import { GameRoomMissionEntity } from '@modules/game-room-missions/entity/game-room-mission.entity';
+import { MissionTemplateEntity } from '@modules/game-room-missions/entity/mission-template.entity';
 import { GameRoomParticipantEntity } from '@modules/game-room-participants/entity/game-room-participant.entity';
 import { GameRoomEntity } from '@modules/game-rooms/entity/game-room.entity';
 import { TurnEntity } from '@modules/turns/entity/turn.entity';
@@ -13,6 +14,9 @@ import {
 } from '@shared/enums';
 import { DataSource, In } from 'typeorm';
 import type {
+  RealtimeMissionStepSummary,
+  RealtimeProjectStructure,
+  RealtimeMissionState,
   RoomParticipantView,
   RoomParticipantsUpdatedEvent,
 } from './realtime.interfaces';
@@ -21,7 +25,7 @@ export interface RoomRealtimeContext {
   room: GameRoomEntity;
   participants: RoomParticipantView[];
   gameState: Record<string, unknown>;
-  missionState: Record<string, unknown> | null;
+  missionState: RealtimeMissionState | null;
 }
 
 @Injectable()
@@ -93,6 +97,19 @@ export class RealtimeRoomStateService {
     const mission = await missionRepository.findOne({
       where: { gameRoomId },
     });
+    if (mission) {
+      mission.missionTemplate =
+        await this.dataSource.getRepository(MissionTemplateEntity).findOne({
+          where: { id: mission.missionTemplateId },
+        }) ?? mission.missionTemplate;
+    }
+    const missionSteps = mission
+      ? await this.dataSource.getRepository(GameRoomMissionStepEntity).find({
+          where: { gameRoomMissionId: mission.id },
+          relations: { missionTemplateStep: true },
+          order: { stepOrder: 'ASC' },
+        })
+      : [];
     const currentStep = mission?.currentStepId
       ? await this.dataSource.getRepository(GameRoomMissionStepEntity).findOne({
           where: { id: mission.currentStepId },
@@ -114,7 +131,7 @@ export class RealtimeRoomStateService {
       participants: participantViews,
       gameState: buildInProgressGameState(room, mission, currentTurn),
       missionState: mission
-        ? buildMissionState(room, mission, currentStep)
+        ? buildMissionState(room, mission, currentStep, missionSteps)
         : null,
     };
   }
@@ -183,14 +200,92 @@ function buildMissionState(
   room: GameRoomEntity,
   mission: GameRoomMissionEntity,
   currentStep: GameRoomMissionStepEntity | null,
-): Record<string, unknown> {
+  missionSteps: GameRoomMissionStepEntity[],
+): RealtimeMissionState {
   return {
     missionId: mission.id,
     missionTemplateId: mission.missionTemplateId,
     currentStepId: currentStep?.id ?? null,
     currentStepStatus: currentStep?.status ?? null,
+    gameRoomMissionStepId: currentStep?.id ?? null,
+    missionTemplateStepId: currentStep?.missionTemplateStepId ?? null,
+    stepOrder: currentStep?.stepOrder ?? null,
+    stepTitle: currentStep?.missionTemplateStep?.title ?? '',
+    stepDescription: currentStep?.missionTemplateStep?.description ?? '',
+    steps: buildMissionSteps(missionSteps),
+    title: mission.missionTemplate?.title ?? '',
+    description: mission.missionTemplate?.description ?? '',
+    language: mission.missionTemplate?.language ?? '',
     difficulty: room.difficulty,
     strikeCount: mission.strikeCount,
-    projectStructure: mission.projectStructureJson,
+    projectStructure: toRealtimeProjectStructure(mission.projectStructureJson),
   };
+}
+
+function buildMissionSteps(
+  missionSteps: GameRoomMissionStepEntity[] | null | undefined,
+): RealtimeMissionStepSummary[] {
+  if (!Array.isArray(missionSteps)) {
+    return [];
+  }
+
+  return missionSteps.map((step) => ({
+    gameRoomMissionStepId: step.id,
+    missionTemplateStepId: step.missionTemplateStepId,
+    stepOrder: step.stepOrder,
+    title: step.missionTemplateStep?.title ?? '',
+    description: step.missionTemplateStep?.description ?? '',
+    status: step.status,
+    targetFilePath: step.missionTemplateStep?.targetFilePath,
+  }));
+}
+
+function toRealtimeProjectStructure(
+  projectStructureJson: Record<string, unknown>,
+): RealtimeProjectStructure {
+  const projectStructure = isRecord(projectStructureJson) ? projectStructureJson : {};
+  const files = Array.isArray(projectStructure.files) ? projectStructure.files : [];
+
+  return {
+    ...projectStructure,
+    files: files
+      .filter((file): file is Record<string, unknown> => isRecord(file))
+      .map((file) => ({
+        ...file,
+        filePath: asString(file.filePath) ?? '',
+        language: asString(file.language) ?? inferLanguageFromPath(asString(file.filePath)) ?? 'text',
+        readonly: typeof file.readonly === 'boolean' ? file.readonly : false,
+        fileUrl:
+          asString(file.fileUrl) ??
+          `data:text/plain;charset=utf-8,${encodeURIComponent(asString(file.content) ?? '')}`,
+      })),
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function asString(value: unknown): string | null {
+  return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
+function inferLanguageFromPath(filePath: string | null): string | null {
+  if (!filePath) {
+    return null;
+  }
+
+  if (filePath.endsWith('.py')) {
+    return 'python';
+  }
+
+  if (filePath.endsWith('.ts')) {
+    return 'typescript';
+  }
+
+  if (filePath.endsWith('.js')) {
+    return 'javascript';
+  }
+
+  return null;
 }
