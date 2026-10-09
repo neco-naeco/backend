@@ -66,6 +66,7 @@ export class DatabaseRealtimeDisconnectService implements RealtimeDisconnectServ
         });
       await this.realtimeEventSupportService.publishGameStateUpdated({
         gameRoomId: input.gameRoomId,
+        mode: disconnectResult.room.mode,
         gameState: gameStateUpdated.gameState,
         missionState: gameStateUpdated.missionState,
         occurredAt: toSeoulIso(new Date()),

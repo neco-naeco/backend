@@ -1,7 +1,7 @@
 import { BaseEntity } from '@database/base.entity';
 import { GameRoomMissionEntity } from '@modules/game-room-missions/entity/game-room-mission.entity';
 import { GameRoomParticipantEntity } from '@modules/game-room-participants/entity/game-room-participant.entity';
-import { GameRoomStatus } from '@shared/enums';
+import { GameMode, GameRoomStatus } from '@shared/enums';
 import { Column, Entity, Index, OneToMany } from 'typeorm';
 
 @Entity('game_rooms')
@@ -12,6 +12,9 @@ export class GameRoomEntity extends BaseEntity {
 
   @Column({ type: 'text' })
   status!: GameRoomStatus;
+
+  @Column({ type: 'text', default: GameMode.MULTIPLAYER })
+  mode!: GameMode;
 
   @Column({ type: 'text' })
   difficulty!: string;

@@ -11,12 +11,13 @@ import { TurnsService } from '@modules/turns/service/turns.service';
 import { AiChatSession } from '@modules/ai-chat-sessions/entity/ai-chat-session.entity';
 import { AiGameSession } from '@modules/ai-game-sessions/entity/ai-game-session.entity';
 import { TurnEntity } from '@modules/turns/entity/turn.entity';
-import { GameRoomMissionEntity } from '@modules/game-room-missions/entity/game-room-mission.entity';
 import { GameRoomMissionStepEntity } from '@modules/game-room-missions/entity/game-room-mission-step.entity';
+import { GameRoomMissionEntity } from '@modules/game-room-missions/entity/game-room-mission.entity';
 import { GameRoomEntity } from '../entity/game-room.entity';
 import {
   AiChatSessionStatus,
   AiGameSessionStatus,
+  GameMode,
   GameRoomParticipantMembershipStatus,
   GameRoomParticipantRole,
   GameRoomStatus,
@@ -24,6 +25,7 @@ import {
 
 export interface CreateGameRoomInput {
   ownerUserId: string;
+  mode?: GameMode;
   difficulty: string;
   timeLimitSeconds: number;
   maxStrikeCount: number;
@@ -87,6 +89,7 @@ export class GameRoomsService {
       const gameRoom = roomRepository.create({
         ownerUserId: input.ownerUserId,
         status: GameRoomStatus.WAITING,
+        mode: input.mode ?? GameMode.MULTIPLAYER,
         difficulty: input.difficulty,
         timeLimitSeconds: input.timeLimitSeconds,
         maxStrikeCount: input.maxStrikeCount,
@@ -242,6 +245,44 @@ export class GameRoomsService {
       }
 
       throw error;
+    }
+  }
+
+  async discardFailedPracticeRoomStart(input: {
+    gameRoomId: string;
+    ownerUserId: string;
+  }): Promise<void> {
+    let preparedRuntimeContainerId: string | null = null;
+
+    await this.dataSource.transaction(async (manager) => {
+      await this.acquireRoomLifecycleLock(manager, input.gameRoomId);
+      await this.acquireWaitingRoomLock(manager, input.ownerUserId);
+
+      const roomRepository = manager.getRepository(GameRoomEntity);
+      const gameRoom = await roomRepository.findOne({
+        where: { id: input.gameRoomId },
+      });
+
+      if (
+        !gameRoom ||
+        gameRoom.mode !== GameMode.PRACTICE ||
+        gameRoom.ownerUserId !== input.ownerUserId
+      ) {
+        return;
+      }
+
+      const mission = await manager.getRepository(GameRoomMissionEntity).findOne({
+        where: { gameRoomId: gameRoom.id },
+      });
+      preparedRuntimeContainerId = mission?.containerId ?? null;
+
+      await roomRepository.delete(gameRoom.id);
+    });
+
+    if (preparedRuntimeContainerId) {
+      await this.gameRoomMissionsService.releasePreparedRuntimeContainer(
+        preparedRuntimeContainerId,
+      );
     }
   }
 

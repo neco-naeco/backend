@@ -19,6 +19,7 @@ import {
   AiRealtimeDeliveryStatus,
   AiRealtimeEventType,
   ExecutionStatus,
+  GameMode,
   GameRoomMissionStepStatus,
   GameRoomParticipantMembershipStatus,
   GameRoomStatus,
@@ -283,12 +284,15 @@ describe('TurnsService', () => {
 
   it('finishes the room and emits mission-result when timeout reaches strike limit', async () => {
     const room = createRoom();
+    room.mode = GameMode.PRACTICE;
+    room.minParticipants = 1;
+    room.maxParticipants = 1;
     room.maxStrikeCount = 1;
     const mission = createMission();
     mission.strikeCount = 0;
     const currentStep = createCurrentStep();
     const turn = createTurn();
-    const participants = createParticipants();
+    const participants = createParticipants().slice(0, 1);
     const snapshots: TurnSnapshotEntity[] = [];
     const turns = [turn];
     const manager = createManager({
@@ -634,10 +638,13 @@ describe('TurnsService', () => {
 
   it('creates the next turn on failed timeout when room progression continues', async () => {
     const room = createRoom();
+    room.mode = GameMode.PRACTICE;
+    room.minParticipants = 1;
+    room.maxParticipants = 1;
     const mission = createMission();
     const currentStep = createCurrentStep();
     const turn = createTurn();
-    const participants = createParticipants();
+    const participants = createParticipants().slice(0, 1);
     const snapshots: TurnSnapshotEntity[] = [];
     const turns = [turn];
     const manager = createManager({
@@ -732,7 +739,15 @@ describe('TurnsService', () => {
 
     expect(turn.status).toBe(TurnStatus.TIMEOUT);
     expect(turns).toHaveLength(2);
-    expect(result.turnChangedEvent).not.toBeNull();
+    expect(result.turnChangedEvent).toMatchObject({
+      nextPlayerId: 'user-1',
+      turnState: {
+        currentPlayerId: 'user-1',
+      },
+    });
+    expect(turns[1].deadlineAt.getTime()).toBe(
+      turns[1].startedAt.getTime() + room.timeLimitSeconds * 1000,
+    );
     expect(gameRoomMissionsService.recordFailedAttempt).toHaveBeenCalled();
     expect(missionResultsService.createMissionResult).toHaveBeenCalled();
   });
@@ -1102,6 +1117,9 @@ describe('TurnsService', () => {
 
   it('marks calculator step as failed when stdout does not match expectedStdout', async () => {
     const room = createRoom();
+    room.mode = GameMode.PRACTICE;
+    room.minParticipants = 1;
+    room.maxParticipants = 1;
     const mission = createCalculatorMission();
     mission.projectStructureJson = {
       ...mission.projectStructureJson,
@@ -1121,7 +1139,7 @@ describe('TurnsService', () => {
       mission,
       currentStep,
       turns: [turn],
-      participants: createParticipants(),
+      participants: createParticipants().slice(0, 1),
       snapshots: [],
     });
     const dataSource = {
@@ -1212,7 +1230,12 @@ describe('TurnsService', () => {
         strikeLimit: room.maxStrikeCount,
       }),
     );
-    expect(result.turnChangedEvent).not.toBeNull();
+    expect(result.turnChangedEvent).toMatchObject({
+      nextPlayerId: 'user-1',
+      turnState: {
+        currentPlayerId: 'user-1',
+      },
+    });
     expect(result.turnChangedEvent?.missionState?.projectStructure.files[0]).toMatchObject({
       filePath: 'main.py',
       content: 'print("last accepted")\n',

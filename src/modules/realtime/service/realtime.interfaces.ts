@@ -1,5 +1,6 @@
 import {
   AiRealtimeEventType,
+  GameMode,
   GameRoomParticipantMembershipStatus,
   GameRoomParticipantRole,
 } from '../../../shared/enums';
@@ -184,6 +185,7 @@ export interface RealtimeTurnState {
 
 export interface GameStartedEvent {
   gameRoomId: string;
+  mode: GameMode;
   gameState: Record<string, unknown>;
   missionState: RealtimeMissionState;
   uiHints: Record<string, unknown>;
@@ -210,6 +212,7 @@ export interface TurnChangedEvent {
 
 export interface GameStateUpdatedEvent {
   gameRoomId: string;
+  mode: GameMode;
   gameState: Record<string, unknown>;
   missionState?: Record<string, unknown> | null;
   occurredAt: string;

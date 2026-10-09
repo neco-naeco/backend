@@ -6,6 +6,11 @@ export enum GameRoomStatus {
   FINISHED = 'FINISHED',
 }
 
+export enum GameMode {
+  MULTIPLAYER = 'MULTIPLAYER',
+  PRACTICE = 'PRACTICE',
+}
+
 export enum GameRoomParticipantMembershipStatus {
   INVITED = 'INVITED',
   JOINED = 'JOINED',

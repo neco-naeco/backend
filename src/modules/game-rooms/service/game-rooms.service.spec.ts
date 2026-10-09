@@ -3,6 +3,7 @@
 import { DataSource, In, Repository } from 'typeorm';
 import { GameRoomMissionsService } from '@modules/game-room-missions/service/game-room-missions.service';
 import { GameRoomParticipantEntity } from '@modules/game-room-participants/entity/game-room-participant.entity';
+import { GameRoomMissionEntity } from '@modules/game-room-missions/entity/game-room-mission.entity';
 import { TurnsService } from '@modules/turns/service/turns.service';
 import { AiChatSession } from '@modules/ai-chat-sessions/entity/ai-chat-session.entity';
 import { AiGameSession } from '@modules/ai-game-sessions/entity/ai-game-session.entity';
@@ -11,6 +12,7 @@ import { GameRoomEntity } from '../entity/game-room.entity';
 import {
   AiChatSessionStatus,
   AiGameSessionStatus,
+  GameMode,
   GameRoomParticipantMembershipStatus,
   GameRoomParticipantRole,
   GameRoomStatus,
@@ -19,7 +21,7 @@ import {
 describe('GameRoomsService', () => {
   let service: GameRoomsService;
   let roomRepository: jest.Mocked<
-    Pick<Repository<GameRoomEntity>, 'create' | 'save' | 'findOne'>
+    Pick<Repository<GameRoomEntity>, 'create' | 'save' | 'findOne' | 'delete'>
   >;
   let participantRepository: jest.Mocked<
     Pick<
@@ -37,6 +39,9 @@ describe('GameRoomsService', () => {
     >
   >;
   let turnsService: jest.Mocked<Pick<TurnsService, 'createInitialTurn'>>;
+  let gameRoomMissionRepository: jest.Mocked<
+    Pick<Repository<GameRoomMissionEntity>, 'findOne'>
+  >;
   let manager: { getRepository: jest.Mock; query: jest.Mock };
   let dataSource: { transaction: jest.Mock; getRepository: jest.Mock };
   let aiChatSessionRepository: { update: jest.Mock };
@@ -47,6 +52,7 @@ describe('GameRoomsService', () => {
       create: jest.fn(),
       findOne: jest.fn(),
       save: jest.fn(),
+      delete: jest.fn(),
     };
 
     participantRepository = {
@@ -67,6 +73,9 @@ describe('GameRoomsService', () => {
     turnsService = {
       createInitialTurn: jest.fn(),
     };
+    gameRoomMissionRepository = {
+      findOne: jest.fn(),
+    };
 
     aiChatSessionRepository = {
       update: jest.fn(),
@@ -80,6 +89,9 @@ describe('GameRoomsService', () => {
       getRepository: jest.fn((entity) => {
         if (entity === GameRoomEntity) {
           return roomRepository;
+        }
+        if (entity === GameRoomMissionEntity) {
+          return gameRoomMissionRepository;
         }
         if (entity === AiChatSession) {
           return aiChatSessionRepository;
@@ -577,6 +589,47 @@ describe('GameRoomsService', () => {
     expect(gameRoomMissionsService.releasePreparedRuntimeContainer).toHaveBeenCalledWith(
       'runtime-container-1',
     );
+  });
+
+  it('discards only a failed practice room and releases its runtime container', async () => {
+    roomRepository.findOne.mockResolvedValue({
+      id: 'room-1',
+      ownerUserId: 'owner-1',
+      mode: GameMode.PRACTICE,
+      status: GameRoomStatus.IN_PROGRESS,
+    } as GameRoomEntity);
+    gameRoomMissionRepository.findOne.mockResolvedValue({
+      id: 'mission-1',
+      gameRoomId: 'room-1',
+      containerId: 'runtime-container-1',
+    } as GameRoomMissionEntity);
+
+    await service.discardFailedPracticeRoomStart({
+      gameRoomId: 'room-1',
+      ownerUserId: 'owner-1',
+    });
+
+    expect(roomRepository.delete).toHaveBeenCalledWith('room-1');
+    expect(gameRoomMissionsService.releasePreparedRuntimeContainer).toHaveBeenCalledWith(
+      'runtime-container-1',
+    );
+  });
+
+  it('does not discard a non-practice room during failed practice cleanup', async () => {
+    roomRepository.findOne.mockResolvedValue({
+      id: 'room-1',
+      ownerUserId: 'owner-1',
+      mode: GameMode.MULTIPLAYER,
+      status: GameRoomStatus.IN_PROGRESS,
+    } as GameRoomEntity);
+
+    await service.discardFailedPracticeRoomStart({
+      gameRoomId: 'room-1',
+      ownerUserId: 'owner-1',
+    });
+
+    expect(roomRepository.delete).not.toHaveBeenCalled();
+    expect(gameRoomMissionsService.releasePreparedRuntimeContainer).not.toHaveBeenCalled();
   });
 
   it('finishes the room when joined participants fall below minParticipants', async () => {

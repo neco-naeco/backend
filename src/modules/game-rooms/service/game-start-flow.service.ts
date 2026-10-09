@@ -56,6 +56,7 @@ export class GameStartFlowService {
 
     await this.realtimeEventSupportService.publishGameStarted({
       gameRoomId: result.gameRoom.id,
+      mode: result.gameRoom.mode,
       gameState,
       missionState,
       uiHints: {
@@ -66,6 +67,7 @@ export class GameStartFlowService {
     });
     await this.realtimeEventSupportService.publishGameStateUpdated({
       gameRoomId: result.gameRoom.id,
+      mode: result.gameRoom.mode,
       gameState,
       missionState,
       occurredAt,

@@ -4,8 +4,10 @@ import { GameRoomMissionsModule } from '@modules/game-room-missions/game-room-mi
 import { RealtimeModule } from '@modules/realtime/realtime.module';
 import { TurnsModule } from '@modules/turns/turns.module';
 import { GameRoomsController } from './controller/game-rooms.controller';
+import { PracticeRoomsController } from './controller/practice-rooms.controller';
 import { GameStartFlowService } from './service/game-start-flow.service';
 import { GameRoomsService } from './service/game-rooms.service';
+import { PracticeRoomsService } from './service/practice-rooms.service';
 
 /**
  * Responsibilities: list accessible rooms, create rooms, return room state, start games.
@@ -14,8 +16,13 @@ import { GameRoomsService } from './service/game-rooms.service';
  */
 @Module({
   imports: [GameRoomMissionsModule, TurnsModule, forwardRef(() => RealtimeModule)],
-  controllers: [GameRoomsController],
-  providers: [AuthenticatedRequestGuard, GameRoomsService, GameStartFlowService],
+  controllers: [GameRoomsController, PracticeRoomsController],
+  providers: [
+    AuthenticatedRequestGuard,
+    GameRoomsService,
+    GameStartFlowService,
+    PracticeRoomsService,
+  ],
   exports: [GameRoomsService, GameStartFlowService],
 })
 export class GameRoomsModule {}

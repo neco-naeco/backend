@@ -78,7 +78,7 @@ export interface SubmitTurnLifecycleInput {
   suppressNextTurnCreation?: boolean;
 }
 
-export interface TimeoutTurnLifecycleInput extends SubmitTurnLifecycleInput {}
+export type TimeoutTurnLifecycleInput = SubmitTurnLifecycleInput;
 
 export interface TurnLifecycleResult {
   submitEvent: TurnSubmitEvent;
@@ -833,6 +833,7 @@ function buildLifecycleEvents(input: {
     },
     gameStateUpdatedEvent: {
       gameRoomId: input.room.id,
+      mode: input.room.mode,
       gameState,
       missionState,
       occurredAt,

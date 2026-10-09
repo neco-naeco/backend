@@ -565,6 +565,12 @@ describe('Spec validation scenarios (docs/specs/08-security-testing-and-delivery
         {} as GameRoomMissionsService,
         {} as ExecutionsService,
         {} as MissionResultsService,
+        {
+          generateMissionFeedback: jest
+            .fn()
+            .mockRejectedValue(new Error('LLM unavailable')),
+        } as never,
+        { appendRealtimeEvent: jest.fn() } as never,
       );
 
       await expect(
@@ -580,7 +586,7 @@ describe('Spec validation scenarios (docs/specs/08-security-testing-and-delivery
   });
 
   describe('duplicate submit handling', () => {
-    it('ignores only TURN_NOT_IN_PROGRESS conflicts during realtime submit', async () => {
+    it('rethrows submit conflicts without publishing lifecycle events', async () => {
       const turnsService: jest.Mocked<Pick<TurnsService, 'submitTurn'>> = {
         submitTurn: jest
           .fn()
@@ -610,7 +616,9 @@ describe('Spec validation scenarios (docs/specs/08-security-testing-and-delivery
         files: [],
       };
 
-      await expect(submitService.submitTurn(request)).resolves.toBeUndefined();
+      await expect(submitService.submitTurn(request)).rejects.toMatchObject({
+        response: { code: 'TURN_NOT_IN_PROGRESS' },
+      });
       await expect(submitService.submitTurn(request)).rejects.toMatchObject({
         response: { code: 'TURN_PLAYER_REQUIRED' },
       });
@@ -667,6 +675,12 @@ describe('Spec validation scenarios (docs/specs/08-security-testing-and-delivery
         {
           createMissionResult: jest.fn().mockResolvedValue({}),
         } as unknown as MissionResultsService,
+        {
+          generateMissionFeedback: jest
+            .fn()
+            .mockRejectedValue(new Error('LLM unavailable')),
+        } as never,
+        { appendRealtimeEvent: jest.fn() } as never,
       );
 
       const gameRoomParticipantsService: jest.Mocked<
@@ -1077,6 +1091,12 @@ function createCalculatorTurnsHarness(input: {
     missionHandlers as unknown as GameRoomMissionsService,
     executionsService as unknown as ExecutionsService,
     missionResultsService as unknown as MissionResultsService,
+    {
+      generateMissionFeedback: jest
+        .fn()
+        .mockRejectedValue(new Error('LLM unavailable')),
+    } as never,
+    { appendRealtimeEvent: jest.fn() } as never,
   );
   const publishedLifecycle: { current: TurnLifecycleResult | null } = { current: null };
   const publishTurnLifecycleResult = jest.fn(async (result: TurnLifecycleResult) => {

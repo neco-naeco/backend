@@ -8,6 +8,7 @@ import { GameRoomParticipantEntity } from '../entity/game-room-participant.entit
 import { RealtimeEventSupportService } from '@modules/realtime/service/realtime-event-support.service';
 import { RealtimeRoomStateService } from '@modules/realtime/service/realtime-room-state.service';
 import {
+  GameMode,
   GameRoomParticipantMembershipStatus,
   GameRoomParticipantRole,
   GameRoomStatus,
@@ -240,6 +241,56 @@ describe('GameRoomParticipantsService', () => {
         code: 'GAME_ROOM_OWNER_REQUIRED',
       }),
     });
+  });
+
+  it('rejects a direct invitation to a practice room without mutating state', async () => {
+    roomRepository.findOne.mockResolvedValue({
+      id: 'room-1',
+      ownerUserId: 'owner-1',
+      mode: GameMode.PRACTICE,
+      status: GameRoomStatus.IN_PROGRESS,
+    } as GameRoomEntity);
+
+    await expect(
+      service.inviteParticipant({
+        actorUserId: 'owner-1',
+        gameRoomId: 'room-1',
+        invitedUserId: 'invitee-1',
+      }),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({
+        code: 'PRACTICE_ROOM_INVITATION_NOT_ALLOWED',
+      }),
+    });
+
+    expect(participantRepository.create).not.toHaveBeenCalled();
+    expect(participantRepository.save).not.toHaveBeenCalled();
+    expect(realtimeEventSupportService.publishRoomParticipantsUpdated).not.toHaveBeenCalled();
+  });
+
+  it('rejects batch invitations to a practice room without mutating state', async () => {
+    roomRepository.findOne.mockResolvedValue({
+      id: 'room-1',
+      ownerUserId: 'owner-1',
+      mode: GameMode.PRACTICE,
+      status: GameRoomStatus.WAITING,
+    } as GameRoomEntity);
+
+    await expect(
+      service.inviteParticipants({
+        actorUserId: 'owner-1',
+        gameRoomId: 'room-1',
+        invitedUserIds: ['invitee-1', 'invitee-2'],
+      }),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({
+        code: 'PRACTICE_ROOM_INVITATION_NOT_ALLOWED',
+      }),
+    });
+
+    expect(participantRepository.create).not.toHaveBeenCalled();
+    expect(participantRepository.save).not.toHaveBeenCalled();
+    expect(realtimeEventSupportService.publishRoomParticipantsUpdated).not.toHaveBeenCalled();
   });
 
   it('rejects duplicate invites for the same room', async () => {

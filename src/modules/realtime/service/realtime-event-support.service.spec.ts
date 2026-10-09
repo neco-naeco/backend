@@ -1,4 +1,4 @@
-import { AiRealtimeEventType } from '@shared/enums';
+import { AiRealtimeEventType, GameMode } from '@shared/enums';
 import type { ModuleRef } from '@nestjs/core';
 import type { RealtimeGateway } from '../gateway/realtime.gateway';
 import type {
@@ -43,6 +43,7 @@ describe('RealtimeEventSupportService', () => {
   it('publishes canonical realtime event names for turn lifecycle and result hooks', async () => {
     await service.publishGameStarted({
       gameRoomId: 'room-1',
+      mode: GameMode.MULTIPLAYER,
       gameState: {
         status: 'IN_PROGRESS',
         turnState: {
@@ -111,6 +112,7 @@ describe('RealtimeEventSupportService', () => {
     });
     await service.publishGameStateUpdated({
       gameRoomId: 'room-1',
+      mode: GameMode.MULTIPLAYER,
       gameState: {
         status: 'IN_PROGRESS',
         turnState: {
@@ -135,6 +137,7 @@ describe('RealtimeEventSupportService', () => {
         'game-started',
         {
           gameRoomId: 'room-1',
+          mode: GameMode.MULTIPLAYER,
           gameState: {
             status: 'IN_PROGRESS',
             turnState: {
@@ -221,6 +224,7 @@ describe('RealtimeEventSupportService', () => {
         'game-state-updated',
         {
           gameRoomId: 'room-1',
+          mode: GameMode.MULTIPLAYER,
           gameState: {
             status: 'IN_PROGRESS',
             turnState: {
@@ -249,6 +253,7 @@ describe('RealtimeEventSupportService', () => {
   it('syncs current turn support state from game-started payloads', async () => {
     await service.publishGameStarted({
       gameRoomId: 'room-1',
+      mode: GameMode.MULTIPLAYER,
       gameState: {
         status: 'IN_PROGRESS',
         turnState: {

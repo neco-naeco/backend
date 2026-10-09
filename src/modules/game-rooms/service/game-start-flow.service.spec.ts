@@ -1,4 +1,9 @@
-import { GameRoomMissionStepStatus, GameRoomStatus, TurnStatus } from '@shared/enums';
+import {
+  GameMode,
+  GameRoomMissionStepStatus,
+  GameRoomStatus,
+  TurnStatus,
+} from '@shared/enums';
 import { RealtimeEventSupportService } from '@modules/realtime/service/realtime-event-support.service';
 import { GameStartFlowService } from './game-start-flow.service';
 import { GameRoomsService } from './game-rooms.service';
@@ -10,6 +15,7 @@ describe('GameStartFlowService', () => {
         gameRoom: {
           id: 'room-1',
           status: GameRoomStatus.IN_PROGRESS,
+          mode: GameMode.MULTIPLAYER,
           difficulty: 'EASY',
           timeLimitSeconds: 30,
           maxStrikeCount: 3,
@@ -84,6 +90,7 @@ describe('GameStartFlowService', () => {
     expect(realtimeEventSupportService.publishGameStarted).toHaveBeenCalledWith(
       expect.objectContaining({
         gameRoomId: 'room-1',
+        mode: GameMode.MULTIPLAYER,
         gameState: expect.objectContaining({
           status: GameRoomStatus.IN_PROGRESS,
           turnState: expect.objectContaining({
@@ -117,7 +124,9 @@ describe('GameStartFlowService', () => {
         }),
       }),
     );
-    expect(realtimeEventSupportService.publishGameStateUpdated).toHaveBeenCalled();
+    expect(realtimeEventSupportService.publishGameStateUpdated).toHaveBeenCalledWith(
+      expect.objectContaining({ mode: GameMode.MULTIPLAYER }),
+    );
     expect(result.gameRoomMission.id).toBe('mission-1');
   });
 });

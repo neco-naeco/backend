@@ -14,6 +14,7 @@ import { RealtimeEventSupportService } from '@modules/realtime/service/realtime-
 import { RealtimeRoomStateService } from '@modules/realtime/service/realtime-room-state.service';
 import { GameRoomParticipantEntity } from '../entity/game-room-participant.entity';
 import {
+  GameMode,
   GameRoomParticipantMembershipStatus,
   GameRoomParticipantRole,
   GameRoomStatus,
@@ -191,6 +192,7 @@ export class GameRoomParticipantsService {
       const participantRepository = manager.getRepository(GameRoomParticipantEntity);
       const gameRoom = await this.getRoomOrThrow(gameRoomRepository, input.gameRoomId);
 
+      this.ensurePracticeRoomInvitationsProhibited(gameRoom);
       this.ensureWaitingRoom(gameRoom);
       await this.ensureActiveOwnerMembership(
         participantRepository,
@@ -516,6 +518,15 @@ export class GameRoomParticipantsService {
       throw new ConflictException({
         code: 'ROOM_NOT_WAITING',
         message: 'Room membership can only change while the room is waiting.',
+      });
+    }
+  }
+
+  private ensurePracticeRoomInvitationsProhibited(gameRoom: GameRoomEntity): void {
+    if (gameRoom.mode === GameMode.PRACTICE) {
+      throw new ConflictException({
+        code: 'PRACTICE_ROOM_INVITATION_NOT_ALLOWED',
+        message: 'Practice rooms cannot accept invitations.',
       });
     }
   }

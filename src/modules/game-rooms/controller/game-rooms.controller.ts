@@ -8,6 +8,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { IsUUID } from 'class-validator';
+import { GameMode } from '@shared/enums';
 import { CurrentUserId } from '@common/decorators/current-user-id.decorator';
 import { AuthenticatedRequestGuard } from '@common/guards/authenticated-request.guard';
 import { toSeoulIso } from '@common/utils/date.util';
@@ -18,6 +19,7 @@ interface GameRoomListItemResponse {
   id: string;
   ownerUserId: string;
   status: string;
+  mode: GameMode;
   difficulty: string;
   timeLimitSeconds: number;
   maxStrikeCount: number;
@@ -54,6 +56,7 @@ export class GameRoomsController {
       id: room.id,
       ownerUserId: room.ownerUserId,
       status: room.status,
+      mode: room.mode,
       difficulty: room.difficulty,
       timeLimitSeconds: room.timeLimitSeconds,
       maxStrikeCount: room.maxStrikeCount,
