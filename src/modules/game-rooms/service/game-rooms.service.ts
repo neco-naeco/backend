@@ -1,3 +1,4 @@
+import { GameItemState, loadGameItemState } from '@modules/game-room-items/game-item-state';
 import {
   ConflictException,
   ForbiddenException,
@@ -7,6 +8,7 @@ import {
 import { DataSource, EntityManager, In, Repository } from 'typeorm';
 import { GameRoomMissionsService } from '@modules/game-room-missions/service/game-room-missions.service';
 import { GameRoomParticipantEntity } from '@modules/game-room-participants/entity/game-room-participant.entity';
+import { GameRoomItemEntity } from '@modules/game-room-items/entity/game-room-item.entity';
 import { TurnsService } from '@modules/turns/service/turns.service';
 import { AiChatSession } from '@modules/ai-chat-sessions/entity/ai-chat-session.entity';
 import { AiGameSession } from '@modules/ai-game-sessions/entity/ai-game-session.entity';
@@ -18,6 +20,7 @@ import {
   AiChatSessionStatus,
   AiGameSessionStatus,
   GameMode,
+  GameItemType,
   GameRoomParticipantMembershipStatus,
   GameRoomParticipantRole,
   GameRoomStatus,
@@ -40,6 +43,7 @@ export interface StartGameInput {
 }
 
 export interface StartGameResult {
+  items: GameItemState[];
   gameRoom: GameRoomEntity;
   gameRoomMission: GameRoomMissionEntity;
   currentTurn: TurnEntity;
@@ -223,11 +227,19 @@ export class GameRoomsService {
             gameRoomMissionId: gameRoomMission.id,
           });
 
+        await manager.getRepository(GameRoomItemEntity).insert({
+          gameRoomId: gameRoom.id,
+          itemType: GameItemType.TIME_EXTENSION_30,
+          quantity: 1,
+          usedCount: 0,
+        });
+
         gameRoom.status = GameRoomStatus.IN_PROGRESS;
         const savedGameRoom = await roomRepository.save(gameRoom);
 
         return {
           gameRoom: savedGameRoom,
+          items: await loadGameItemState(manager, gameRoom.id),
           gameRoomMission,
           currentTurn,
           currentStep,

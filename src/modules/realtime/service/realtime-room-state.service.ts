@@ -12,7 +12,8 @@ import {
   GameRoomStatus,
   TurnStatus,
 } from '@shared/enums';
-import { DataSource, In } from 'typeorm';
+import { loadGameItemState } from '@modules/game-room-items/game-item-state';
+import { DataSource, EntityManager, In } from 'typeorm';
 import type {
   RealtimeMissionStepSummary,
   RealtimeProjectStructure,
@@ -56,7 +57,13 @@ export class RealtimeRoomStateService {
   }
 
   async loadRoomRealtimeContext(gameRoomId: string): Promise<RoomRealtimeContext> {
-    const roomRepository = this.dataSource.getRepository(GameRoomEntity);
+    return this.dataSource.transaction('REPEATABLE READ', (manager) =>
+      this.loadRoomSnapshot(manager, gameRoomId),
+    );
+  }
+
+  private async loadRoomSnapshot(manager: EntityManager, gameRoomId: string): Promise<RoomRealtimeContext> {
+    const roomRepository = manager.getRepository(GameRoomEntity);
     const room = await roomRepository.findOne({
       where: { id: gameRoomId },
     });
@@ -68,7 +75,8 @@ export class RealtimeRoomStateService {
       });
     }
 
-    const participantRepository = this.dataSource.getRepository(
+    const items = await loadGameItemState(manager, gameRoomId);
+    const participantRepository = manager.getRepository(
       GameRoomParticipantEntity,
     );
     const participants = await participantRepository.find({
@@ -76,6 +84,7 @@ export class RealtimeRoomStateService {
       order: { createdAt: 'ASC' },
     });
     const nicknameByUserId = await this.loadNicknameByUserId(
+      manager,
       participants.map((participant) => participant.userId),
     );
     const participantViews = participants.map((participant) =>
@@ -88,35 +97,36 @@ export class RealtimeRoomStateService {
         participants: participantViews,
         gameState: {
           status: room.status,
+          items,
         },
         missionState: null,
       };
     }
 
-    const missionRepository = this.dataSource.getRepository(GameRoomMissionEntity);
+    const missionRepository = manager.getRepository(GameRoomMissionEntity);
     const mission = await missionRepository.findOne({
       where: { gameRoomId },
     });
     if (mission) {
       mission.missionTemplate =
-        await this.dataSource.getRepository(MissionTemplateEntity).findOne({
+        await manager.getRepository(MissionTemplateEntity).findOne({
           where: { id: mission.missionTemplateId },
         }) ?? mission.missionTemplate;
     }
     const missionSteps = mission
-      ? await this.dataSource.getRepository(GameRoomMissionStepEntity).find({
+      ? await manager.getRepository(GameRoomMissionStepEntity).find({
           where: { gameRoomMissionId: mission.id },
           relations: { missionTemplateStep: true },
           order: { stepOrder: 'ASC' },
         })
       : [];
     const currentStep = mission?.currentStepId
-      ? await this.dataSource.getRepository(GameRoomMissionStepEntity).findOne({
+      ? await manager.getRepository(GameRoomMissionStepEntity).findOne({
           where: { id: mission.currentStepId },
           relations: { missionTemplateStep: true },
         })
       : null;
-    const currentTurn = await this.dataSource.getRepository(TurnEntity).findOne({
+    const currentTurn = await manager.getRepository(TurnEntity).findOne({
       where: {
         gameRoomId,
         status: TurnStatus.IN_PROGRESS,
@@ -129,7 +139,7 @@ export class RealtimeRoomStateService {
     return {
       room,
       participants: participantViews,
-      gameState: buildInProgressGameState(room, mission, currentTurn),
+      gameState: { ...buildInProgressGameState(room, mission, currentTurn), items },
       missionState: mission
         ? buildMissionState(room, mission, currentStep, missionSteps)
         : null,
@@ -137,6 +147,7 @@ export class RealtimeRoomStateService {
   }
 
   private async loadNicknameByUserId(
+    manager: EntityManager,
     userIds: string[],
   ): Promise<Map<string, string>> {
     const uniqueUserIds = [...new Set(userIds)];
@@ -145,7 +156,7 @@ export class RealtimeRoomStateService {
       return new Map();
     }
 
-    const users = await this.dataSource.getRepository(User).find({
+    const users = await manager.getRepository(User).find({
       where: {
         id: In(uniqueUserIds),
       },

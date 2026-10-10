@@ -1,3 +1,4 @@
+import { GameRoomItemsService } from '@modules/game-room-items/service/game-room-items.service';
 import WebSocket from 'ws';
 import { ConflictException } from '@nestjs/common';
 import { RealtimeGateway } from './realtime.gateway';
@@ -68,6 +69,7 @@ describe('RealtimeGateway support hooks', () => {
     };
 
     const gateway = new RealtimeGateway(
+      { useItem: jest.fn() } as unknown as GameRoomItemsService,
       authService,
       roomAccessService,
       disconnectService,
@@ -142,6 +144,7 @@ describe('RealtimeGateway support hooks', () => {
     };
 
     const gateway = new RealtimeGateway(
+      { useItem: jest.fn() } as unknown as GameRoomItemsService,
       authService,
       roomAccessService,
       disconnectService,
@@ -223,6 +226,7 @@ describe('RealtimeGateway support hooks', () => {
     };
 
     const gateway = new RealtimeGateway(
+      { useItem: jest.fn() } as unknown as GameRoomItemsService,
       authService,
       roomAccessService,
       disconnectService,
@@ -313,6 +317,7 @@ describe('RealtimeGateway support hooks', () => {
     };
 
     const gateway = new RealtimeGateway(
+      { useItem: jest.fn() } as unknown as GameRoomItemsService,
       authService,
       roomAccessService,
       disconnectService,
@@ -382,6 +387,7 @@ describe('RealtimeGateway support hooks', () => {
     };
 
     const gateway = new RealtimeGateway(
+      { useItem: jest.fn() } as unknown as GameRoomItemsService,
       authService,
       roomAccessService,
       disconnectService,
@@ -470,6 +476,7 @@ describe('RealtimeGateway support hooks', () => {
     };
 
     const gateway = new RealtimeGateway(
+      { useItem: jest.fn() } as unknown as GameRoomItemsService,
       authService,
       roomAccessService,
       disconnectService,

@@ -1,4 +1,5 @@
 import {
+  ConflictException,
   Inject,
   Injectable,
   Logger,
@@ -66,6 +67,7 @@ export class RealtimeTurnTimeoutService
           turnId: turn.id,
         });
         const result = await this.turnsService.timeoutTurn({
+          reason: 'DEADLINE',
           gameRoomId: turn.gameRoomId,
           turnId: turn.id,
           userId: turn.playerUserId,
@@ -75,6 +77,17 @@ export class RealtimeTurnTimeoutService
 
         await this.realtimeEventSupportService.publishTurnLifecycleResult(result);
       } catch (error) {
+        if (error instanceof ConflictException) {
+          const response = error.getResponse();
+          if (
+            typeof response === 'object' &&
+            'code' in response &&
+            (response.code === 'TURN_NOT_EXPIRED' ||
+              response.code === 'TURN_NOT_IN_PROGRESS')
+          ) {
+            continue;
+          }
+        }
         const message =
           error instanceof Error ? error.message : 'unknown timeout sweep error';
         this.logger.warn(`Failed to process expired turn ${turn.id}: ${message}`);

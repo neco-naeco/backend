@@ -1,3 +1,4 @@
+import { GameRoomItemsModule } from '../game-room-items/game-room-items.module';
 import { forwardRef, Module } from '@nestjs/common';
 import { RedisIntegrationModule } from '../../integrations/redis/redis.module';
 import { WebsocketIntegrationModule } from '../../integrations/websocket/websocket.module';
@@ -36,6 +37,7 @@ import { TeamChatModule } from '../team-chat/team-chat.module';
     WebsocketIntegrationModule,
     RedisIntegrationModule,
     TurnsModule,
+    GameRoomItemsModule,
     GameRoomParticipantsModule,
     forwardRef(() => GameRoomsModule),
     TeamChatModule,

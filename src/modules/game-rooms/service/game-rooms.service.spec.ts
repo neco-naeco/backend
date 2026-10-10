@@ -2,6 +2,7 @@
 
 import { DataSource, In, Repository } from 'typeorm';
 import { GameRoomMissionsService } from '@modules/game-room-missions/service/game-room-missions.service';
+import { GameRoomItemEntity } from '@modules/game-room-items/entity/game-room-item.entity';
 import { GameRoomParticipantEntity } from '@modules/game-room-participants/entity/game-room-participant.entity';
 import { GameRoomMissionEntity } from '@modules/game-room-missions/entity/game-room-mission.entity';
 import { TurnsService } from '@modules/turns/service/turns.service';
@@ -13,6 +14,7 @@ import {
   AiChatSessionStatus,
   AiGameSessionStatus,
   GameMode,
+  GameItemType,
   GameRoomParticipantMembershipStatus,
   GameRoomParticipantRole,
   GameRoomStatus,
@@ -42,6 +44,7 @@ describe('GameRoomsService', () => {
   let gameRoomMissionRepository: jest.Mocked<
     Pick<Repository<GameRoomMissionEntity>, 'findOne'>
   >;
+  let itemRepository: { insert: jest.Mock; findOne: jest.Mock };
   let manager: { getRepository: jest.Mock; query: jest.Mock };
   let dataSource: { transaction: jest.Mock; getRepository: jest.Mock };
   let aiChatSessionRepository: { update: jest.Mock };
@@ -85,8 +88,13 @@ describe('GameRoomsService', () => {
       update: jest.fn(),
     };
 
+    itemRepository = { insert: jest.fn().mockResolvedValue({}), findOne: jest.fn().mockResolvedValue({ quantity: 1 }) };
+
     manager = {
       getRepository: jest.fn((entity) => {
+        if (entity === GameRoomItemEntity) {
+          return itemRepository;
+        }
         if (entity === GameRoomEntity) {
           return roomRepository;
         }
@@ -326,15 +334,16 @@ describe('GameRoomsService', () => {
     expect(gameRoomMissionsService.createMissionForGameStart).not.toHaveBeenCalled();
   });
 
-  it('creates the room mission and marks the room in progress when start validation passes', async () => {
+  it.each([GameMode.MULTIPLAYER, GameMode.PRACTICE])('allocates one item when starting a %s room', async (mode) => {
     roomRepository.findOne.mockResolvedValue({
       id: 'room-1',
+      mode,
       ownerUserId: 'owner-1',
       status: GameRoomStatus.WAITING,
       difficulty: 'EASY',
       timeLimitSeconds: 30,
-      minParticipants: 2,
-      maxParticipants: 4,
+      minParticipants: mode === GameMode.PRACTICE ? 1 : 2,
+      maxParticipants: mode === GameMode.PRACTICE ? 1 : 4,
     } as GameRoomEntity);
     participantRepository.findOne.mockResolvedValue({
       id: 'owner-participant-1',
@@ -343,7 +352,7 @@ describe('GameRoomsService', () => {
       role: GameRoomParticipantRole.OWNER,
       membershipStatus: GameRoomParticipantMembershipStatus.JOINED,
     } as GameRoomParticipantEntity);
-    participantRepository.count.mockResolvedValue(2);
+    participantRepository.count.mockResolvedValue(mode === GameMode.PRACTICE ? 1 : 2);
     gameRoomMissionsService.createMissionForGameStart.mockResolvedValue({
       id: 'mission-1',
       containerId: 'runtime-container-1',
@@ -416,7 +425,15 @@ describe('GameRoomsService', () => {
         status: GameRoomStatus.IN_PROGRESS,
       }),
     );
+    expect(itemRepository.insert).toHaveBeenCalledTimes(1);
+    expect(itemRepository.insert).toHaveBeenCalledWith({
+      gameRoomId: 'room-1',
+      itemType: GameItemType.TIME_EXTENSION_30,
+      quantity: 1,
+      usedCount: 0,
+    });
     expect(result).toEqual({
+      items: [{ itemType: GameItemType.TIME_EXTENSION_30, remainingQuantity: 1 }],
       gameRoom: expect.objectContaining({
         id: 'room-1',
         status: GameRoomStatus.IN_PROGRESS,
@@ -432,6 +449,12 @@ describe('GameRoomsService', () => {
       }),
     });
     expect(gameRoomMissionsService.releasePreparedRuntimeContainer).not.toHaveBeenCalled();
+    await expect(service.startGame({
+      actorUserId: 'owner-1',
+      gameRoomId: 'room-1',
+      missionTemplateId: 'template-1',
+    })).rejects.toMatchObject({ response: { code: 'ROOM_NOT_WAITING' } });
+    expect(itemRepository.insert).toHaveBeenCalledTimes(1);
   });
 
   it('reloads the mission template when mission start returns a mission without relation metadata', async () => {

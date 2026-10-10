@@ -31,3 +31,6 @@ tsconfig*.tsbuildinfo
 *.log
 npm-debug.log*
 pnpm-debug.log*
+
+# Local database migration backups (may contain private data)
+.local-backups/

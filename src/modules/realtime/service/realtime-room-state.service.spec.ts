@@ -1,3 +1,4 @@
+import { GameRoomItemEntity } from '@modules/game-room-items/entity/game-room-item.entity';
 /// <reference types="jest" />
 
 import { DataSource, ObjectLiteral, Repository } from 'typeorm';
@@ -95,8 +96,9 @@ describe('RealtimeRoomStateService', () => {
       } as TurnEntity),
     });
 
-    const dataSource = {
+    const manager = {
       getRepository: jest.fn((entity) => {
+        if (entity === GameRoomItemEntity) { return { findOne: jest.fn().mockResolvedValue({ quantity: 0 }) }; }
         if (entity === GameRoomEntity) {
           return roomRepository;
         }
@@ -117,7 +119,8 @@ describe('RealtimeRoomStateService', () => {
         }
         return turnRepository;
       }),
-    } as unknown as DataSource;
+    };
+    const dataSource = { transaction: jest.fn(async (_isolation, callback) => callback(manager)) } as unknown as DataSource;
 
     const service = new RealtimeRoomStateService(dataSource);
 
@@ -128,6 +131,8 @@ describe('RealtimeRoomStateService', () => {
     expect(missionTemplateRepository.findOne).toHaveBeenCalledWith({
       where: { id: 'template-1' },
     });
+    expect(dataSource.transaction).toHaveBeenCalledWith('REPEATABLE READ', expect.any(Function));
+    expect(event.gameState.items).toEqual([{ itemType: 'TIME_EXTENSION_30', remainingQuantity: 0 }]);
     expect(event.missionState).toEqual(
       expect.objectContaining({
         missionId: 'mission-1',

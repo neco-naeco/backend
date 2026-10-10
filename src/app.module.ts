@@ -17,6 +17,7 @@ import runtimeConfig from './common/config/runtime.config';
 import { GameRoomsModule } from './modules/game-rooms/game-rooms.module';
 import { GameRoomParticipantsModule } from './modules/game-room-participants/game-room-participants.module';
 import { RealtimeModule } from './modules/realtime/realtime.module';
+import { GameRoomItemsModule } from './modules/game-room-items/game-room-items.module';
 import { TeamChatModule } from './modules/team-chat/team-chat.module';
 
 @Module({
@@ -36,6 +37,7 @@ import { TeamChatModule } from './modules/team-chat/team-chat.module';
     GameRoomParticipantsModule,
     RealtimeModule,
     TeamChatModule,
+    GameRoomItemsModule,
   ],
   providers: [
     {

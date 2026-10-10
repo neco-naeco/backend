@@ -1,3 +1,4 @@
+import { GameRoomItemEntity } from '@modules/game-room-items/entity/game-room-item.entity';
 import { ConflictException, ForbiddenException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DataSource, EntityManager } from 'typeorm';
@@ -31,6 +32,38 @@ import { TurnEntity } from '../entity/turn.entity';
 import { TurnsService } from './turns.service';
 
 describe('TurnsService', () => {
+  afterEach(() => jest.useRealTimers());
+  it('rejects a stale expiration candidate using the deadline read after locking', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-05-26T01:00:31.000Z'));
+    const turn = createTurn();
+    const query = jest.fn();
+    const findOne = jest.fn(async () => {
+      // Simulate a committed extension encountered after waiting for the row lock.
+      jest.setSystemTime(new Date('2026-05-26T01:00:35.000Z'));
+      return { ...turn, deadlineAt: new Date('2026-05-26T01:01:00.000Z') };
+    });
+    const save = jest.fn();
+    const manager = { query, getRepository: jest.fn(() => ({ findOne, save })) };
+    const service = new TurnsService(
+      {} as ConfigService,
+      { transaction: async (callback: (value: unknown) => unknown) => callback(manager) } as DataSource,
+      {} as GameRoomMissionsService, {} as ExecutionsService,
+      {} as MissionResultsService, {} as LlmMissionFeedbackGeneratorPort,
+      {} as AiGameSessionsService,
+    );
+    await expect(service.timeoutTurn({
+      reason: 'DEADLINE', gameRoomId: turn.gameRoomId, turnId: turn.id,
+      userId: turn.playerUserId, occurredAt: '2026-05-26T01:00:31.000Z', files: [],
+    })).rejects.toMatchObject({ response: { code: 'TURN_NOT_EXPIRED' } });
+    expect(findOne).toHaveBeenCalledTimes(1);
+    expect(findOne).toHaveBeenCalledWith({
+      where: { id: turn.id, gameRoomId: turn.gameRoomId },
+      lock: { mode: 'pessimistic_write' },
+    });
+    expect(query.mock.invocationCallOrder[0]).toBeLessThan(findOne.mock.invocationCallOrder[0]);
+    expect(save).not.toHaveBeenCalled();
+  });
+
   it('persists snapshot, execution outcome, and next turn on successful submit', async () => {
     const room = createRoom();
     const mission = createMission();
@@ -73,6 +106,7 @@ describe('TurnsService', () => {
     const snapshots: TurnSnapshotEntity[] = [];
     const turns = [turn];
     const manager = createManager({
+      itemQuantity: 1,
       room,
       mission,
       currentStep,
@@ -259,6 +293,7 @@ describe('TurnsService', () => {
     });
     expect(result.missionResultEvent).toBeNull();
     expect(result.gameStateUpdatedEvent.gameState).toMatchObject({
+      items: [{ itemType: 'TIME_EXTENSION_30', remainingQuantity: 1 }],
       status: GameRoomStatus.IN_PROGRESS,
     });
     expect(result.gameStateUpdatedEvent.missionState).toMatchObject({
@@ -282,7 +317,12 @@ describe('TurnsService', () => {
     });
   });
 
-  it('finishes the room and emits mission-result when timeout reaches strike limit', async () => {
+  it.each([
+    ['DEADLINE', -1],
+    ['DEADLINE', 0],
+    ['DISCONNECT', 30000],
+  ] as const)('finishes at the strike limit for %s with deadline offset %i', async (reason, deadlineOffset) => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-05-26T01:01:00.000Z'));
     const room = createRoom();
     room.mode = GameMode.PRACTICE;
     room.minParticipants = 1;
@@ -292,6 +332,7 @@ describe('TurnsService', () => {
     mission.strikeCount = 0;
     const currentStep = createCurrentStep();
     const turn = createTurn();
+    turn.deadlineAt = new Date(Date.now() + deadlineOffset);
     const participants = createParticipants().slice(0, 1);
     const snapshots: TurnSnapshotEntity[] = [];
     const turns = [turn];
@@ -375,6 +416,7 @@ describe('TurnsService', () => {
     );
 
     const result = await service.timeoutTurn({
+      reason,
       gameRoomId: room.id,
       turnId: turn.id,
       userId: turn.playerUserId,
@@ -392,6 +434,11 @@ describe('TurnsService', () => {
     });
 
     expect(turn.status).toBe(TurnStatus.TIMEOUT);
+    await expect(service.timeoutTurn({
+      reason, gameRoomId: room.id, turnId: turn.id,
+      userId: turn.playerUserId, occurredAt: new Date().toISOString(), files: [],
+    })).rejects.toMatchObject({ response: { code: 'TURN_NOT_IN_PROGRESS' } });
+    expect(snapshots).toHaveLength(1);
     expect(gameRoomMissionsService.recordFailedAttempt).toHaveBeenCalledWith(
       expect.objectContaining({
         strikeLimit: 1,
@@ -623,6 +670,7 @@ describe('TurnsService', () => {
     );
 
     const result = await service.timeoutTurn({
+      reason: 'DEADLINE',
       gameRoomId: room.id,
       turnId: turn.id,
       userId: turn.playerUserId,
@@ -721,6 +769,7 @@ describe('TurnsService', () => {
     );
 
     const result = await service.timeoutTurn({
+      reason: 'DEADLINE',
       gameRoomId: room.id,
       turnId: turn.id,
       userId: turn.playerUserId,
@@ -834,6 +883,7 @@ describe('TurnsService', () => {
     );
 
     const result = await service.timeoutTurn({
+      reason: 'DEADLINE',
       gameRoomId: room.id,
       turnId: turn.id,
       userId: turn.playerUserId,
@@ -2164,6 +2214,7 @@ describe('TurnsService', () => {
     );
 
     const result = await service.timeoutTurn({
+      reason: 'DEADLINE',
       gameRoomId: room.id,
       turnId: turn.id,
       userId: turn.playerUserId,
@@ -2481,6 +2532,7 @@ function createParticipants(): GameRoomParticipantEntity[] {
 }
 
 function createManager(input: {
+  itemQuantity?: number;
   room: GameRoomEntity;
   mission: GameRoomMissionEntity;
   currentStep: GameRoomMissionStepEntity;
@@ -2540,6 +2592,9 @@ function createManager(input: {
         };
       }
 
+      if (entity === GameRoomItemEntity) {
+        return { findOne: jest.fn().mockResolvedValue(input.itemQuantity === undefined ? null : { quantity: input.itemQuantity }) };
+      }
       if (entity === TurnEntity) {
         return {
           findOne: jest.fn(async ({ where }) =>

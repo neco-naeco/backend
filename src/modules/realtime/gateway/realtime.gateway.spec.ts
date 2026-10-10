@@ -1,5 +1,6 @@
+import { GameRoomItemsService } from '@modules/game-room-items/service/game-room-items.service';
 /// <reference types="jest" />
-import { ForbiddenException, INestApplication, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, INestApplication, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { RedisIntegrationModule } from '../../../integrations/redis/redis.module';
 import WebSocket from 'ws';
@@ -62,6 +63,7 @@ describe('RealtimeGateway', () => {
       imports: [WebsocketIntegrationModule, RedisIntegrationModule],
       providers: [
         RealtimeGateway,
+        { provide: GameRoomItemsService, useValue: { useItem: jest.fn() } },
         {
           provide: REALTIME_AUTH_SERVICE,
           useValue: authService,
@@ -101,6 +103,65 @@ describe('RealtimeGateway', () => {
   afterEach(async () => {
     if (app) {
       await app.close();
+    }
+  });
+
+  it('routes item success to the room and rejection only to the requesting WebSocket', async () => {
+    const roomId = '00000000-0000-4000-8000-000000000001';
+    const otherRoom = '00000000-0000-4000-8000-000000000004';
+    const userId = '00000000-0000-4000-8000-000000000003';
+    const payload = {
+      gameRoomId: roomId,
+      turnId: '00000000-0000-4000-8000-000000000002',
+      itemType: 'TIME_EXTENSION_30',
+    };
+    const success = {
+      ...payload, usedBy: { userId, nickname: 'server-name' }, remainingQuantity: 0,
+      effect: { addedSeconds: 30, deadlineAt: '2026-10-10T12:01:00.000+09:00' },
+      occurredAt: '2026-10-10T12:00:20.000+09:00',
+    };
+    authService.validateAccessToken.mockResolvedValue({ userId });
+    roomAccessService.getJoinRoomState.mockImplementation(async ({ gameRoomId }) => ({
+      gameRoomId,
+      initialState: { ...createJoinRoomState().initialState, gameRoomId },
+    }));
+    const itemService = app.get(GameRoomItemsService);
+    const useItem = jest.spyOn(itemService, 'useItem');
+    useItem.mockResolvedValue(success as Awaited<ReturnType<GameRoomItemsService['useItem']>>);
+    const clients: WebSocket[] = [];
+    try {
+      for (const gameRoomId of [roomId, roomId, otherRoom]) {
+        const client = await connectClient(port);
+        clients.push(client);
+        const joined = waitForMessage(client);
+        sendJoinRoom(client, { gameRoomId, accessToken: 'token', userId });
+        await joined;
+      }
+      const [requester, peer, outsider] = clients;
+      const outsideMessage = jest.fn();
+      outsider.on('message', outsideMessage);
+      const ownerResult = waitForMessage(requester);
+      const peerResult = waitForMessage(peer);
+      requester.send(JSON.stringify({ event: 'game-item-use', data: { ...payload, userId: 'forged' } }));
+      await expect(ownerResult).resolves.toEqual({ event: 'game-item-used', data: success });
+      await expect(peerResult).resolves.toEqual({ event: 'game-item-used', data: success });
+      expect(useItem).toHaveBeenCalledWith({ ...payload, userId });
+      expect(outsideMessage).not.toHaveBeenCalled();
+
+      useItem.mockRejectedValue(new ConflictException({ code: 'GAME_ITEM_EXHAUSTED' }));
+      const peerMessage = jest.fn();
+      peer.on('message', peerMessage);
+      const rejected = waitForMessage(requester);
+      requester.send(JSON.stringify({ event: 'game-item-use', data: payload }));
+      await expect(rejected).resolves.toMatchObject({
+        event: 'game-item-error', data: { ...payload, code: 'GAME_ITEM_EXHAUSTED' },
+      });
+      expect(peerMessage).not.toHaveBeenCalled();
+      expect(outsideMessage).not.toHaveBeenCalled();
+      expect(requester.readyState).toBe(WebSocket.OPEN);
+      expect(useItem).toHaveBeenCalledTimes(2);
+    } finally {
+      clients.forEach((client) => client.terminate());
     }
   });
 

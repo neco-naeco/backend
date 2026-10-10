@@ -1,3 +1,5 @@
+import { GameRoomItemEntity } from '@modules/game-room-items/entity/game-room-item.entity';
+import { GameRoomItemsService } from '@modules/game-room-items/service/game-room-items.service';
 /**
  * Document-driven scenario checks from docs/specs/08-security-testing-and-delivery.md.
  * Uses the same mocked-repository service test style as module unit specs.
@@ -233,6 +235,9 @@ describe('Spec validation scenarios (docs/specs/08-security-testing-and-delivery
           if (entity === GameRoomMissionStepEntity) {
             return currentStepRepository;
           }
+          if (entity === GameRoomItemEntity) {
+            return { findOne: jest.fn().mockResolvedValue(null) };
+          }
           if (entity === TurnEntity) {
             return turnRepository;
           }
@@ -241,7 +246,7 @@ describe('Spec validation scenarios (docs/specs/08-security-testing-and-delivery
         }),
       };
       const roomStateService = new RealtimeRoomStateService(
-        dataSource as unknown as DataSource,
+        { transaction: async (_isolation: string, callback: (manager: unknown) => unknown) => callback(dataSource) } as unknown as DataSource,
       );
 
       const event = await roomStateService.buildParticipantsUpdatedEvent({
@@ -327,6 +332,7 @@ describe('Spec validation scenarios (docs/specs/08-security-testing-and-delivery
 
     it('fans out code-updated with whole-file content and optional sessionId', async () => {
       const gateway = new RealtimeGateway(
+        { useItem: jest.fn() } as unknown as GameRoomItemsService,
         {
           validateAccessToken: jest
             .fn()
@@ -1370,6 +1376,9 @@ function createScenarioTurnManager(input: {
 
   return {
     getRepository: jest.fn((entity: unknown) => {
+      if (entity === GameRoomItemEntity) {
+        return { findOne: jest.fn().mockResolvedValue(null) };
+      }
       if (entity === TurnEntity) {
         return turnRepository;
       }

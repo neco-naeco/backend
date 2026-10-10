@@ -1,3 +1,4 @@
+import { loadGameItemState } from '@modules/game-room-items/game-item-state';
 import {
   ConflictException,
   ForbiddenException,
@@ -78,7 +79,9 @@ export interface SubmitTurnLifecycleInput {
   suppressNextTurnCreation?: boolean;
 }
 
-export type TimeoutTurnLifecycleInput = SubmitTurnLifecycleInput;
+export type TimeoutTurnLifecycleInput = SubmitTurnLifecycleInput & {
+  reason: 'DEADLINE' | 'DISCONNECT';
+};
 
 export interface TurnLifecycleResult {
   submitEvent: TurnSubmitEvent;
@@ -178,6 +181,7 @@ export class TurnsService {
 
   private async finishTurn(input: SubmitTurnLifecycleInput & {
     trigger: TurnStatus.SUBMITTED | TurnStatus.TIMEOUT;
+    reason?: TimeoutTurnLifecycleInput['reason'];
   }): Promise<TurnLifecycleResult> {
     const preparedState = await this.prepareTurnEndState(input);
     const executionOutcome = await this.executeSnapshot(preparedState);
@@ -276,6 +280,7 @@ export class TurnsService {
   private async prepareTurnEndState(
     input: SubmitTurnLifecycleInput & {
       trigger: TurnStatus.SUBMITTED | TurnStatus.TIMEOUT;
+      reason?: TimeoutTurnLifecycleInput['reason'];
     },
   ): Promise<PreparedTurnEndState> {
     return this.dataSource.transaction(async (manager) => {
@@ -303,14 +308,25 @@ export class TurnsService {
         });
       }
 
+      // Read the clock only after the row lock: a queued sweep may be stale.
+      const occurredAt = new Date();
+      if (
+        input.trigger === TurnStatus.TIMEOUT &&
+        input.reason === 'DEADLINE' &&
+        turn.deadlineAt.getTime() > occurredAt.getTime()
+      ) {
+        throw new ConflictException({
+          code: 'TURN_NOT_EXPIRED',
+          message: 'The current turn deadline has not elapsed.',
+        });
+      }
+
       const room = await this.getRoomOrThrow(roomRepository, input.gameRoomId);
       const mission = await this.getMissionOrThrow(missionRepository, turn.missionId);
       const currentStep = await this.getCurrentStepOrThrow(
         currentStepRepository,
         mission,
       );
-      const occurredAt = new Date();
-
       const snapshot = snapshotRepository.create({
         gameRoomId: input.gameRoomId,
         turnId: turn.id,
@@ -464,7 +480,7 @@ export class TurnsService {
         lifecycleSnapshotFiles = [];
       }
 
-      return buildLifecycleEvents({
+      const result = buildLifecycleEvents({
         room: nextState.room,
         mission: hydratedMission,
         currentStep: nextState.currentStep,
@@ -480,6 +496,8 @@ export class TurnsService {
         missionFinished: nextState.missionFinished,
         suppressNextTurnCreation: input.preparedState.suppressNextTurnCreation,
       });
+      result.gameStateUpdatedEvent.gameState.items = await loadGameItemState(manager, nextState.room.id);
+      return result;
     });
   }
 
@@ -696,7 +714,10 @@ export class TurnsService {
     turnId: string,
     gameRoomId: string,
   ): Promise<TurnEntity> {
+    // All callers run inside a transaction, after the turn advisory lock.
+    // Item use must share this row lock before inspecting/updating the deadline.
     const turn = await repository.findOne({
+      lock: { mode: 'pessimistic_write' },
       where: {
         id: turnId,
         gameRoomId,

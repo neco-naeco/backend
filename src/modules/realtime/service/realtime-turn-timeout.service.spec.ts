@@ -1,3 +1,4 @@
+import { ConflictException, Logger } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { TurnStatus } from '@shared/enums';
 import { TurnEntity } from '@modules/turns/entity/turn.entity';
@@ -7,6 +8,32 @@ import { RealtimeEventSupportService } from './realtime-event-support.service';
 import { RealtimeTurnTimeoutService } from './realtime-turn-timeout.service';
 
 describe('RealtimeTurnTimeoutService', () => {
+  it.each(['TURN_NOT_EXPIRED', 'TURN_NOT_IN_PROGRESS'])(
+    'silently skips %s and releases the processing guard for the next sweep',
+    async (code) => {
+      const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+      try {
+        const timeoutTurn = jest.fn().mockRejectedValue(new ConflictException({ code }));
+        const publishTurnLifecycleResult = jest.fn();
+        const service = new RealtimeTurnTimeoutService(
+          { getRepository: () => ({ find: async () => [{
+            id: 'turn-1', gameRoomId: 'room-1', playerUserId: 'user-1',
+          }] }) } as unknown as DataSource,
+          { timeoutTurn } as unknown as TurnsService,
+          { publishTurnLifecycleResult } as unknown as RealtimeEventSupportService,
+          { listLatestFileContents: async () => [] } as unknown as RealtimeSupportStateStore,
+        );
+        await service.processExpiredTurns();
+        await service.processExpiredTurns();
+        expect(timeoutTurn).toHaveBeenCalledTimes(2);
+        expect(publishTurnLifecycleResult).not.toHaveBeenCalled();
+        expect(warn).not.toHaveBeenCalled();
+      } finally {
+        warn.mockRestore();
+      }
+    },
+  );
+
   it('runs the timeout lifecycle for expired in-progress turns', async () => {
     const dataSource = {
       getRepository: jest.fn().mockReturnValue({
@@ -93,6 +120,7 @@ describe('RealtimeTurnTimeoutService', () => {
       turnId: 'turn-1',
     });
     expect(turnsService.timeoutTurn).toHaveBeenCalledWith({
+      reason: 'DEADLINE',
       gameRoomId: 'room-1',
       turnId: 'turn-1',
       userId: 'user-1',
