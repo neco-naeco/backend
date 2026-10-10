@@ -8,6 +8,9 @@ export const REALTIME_ASSISTIVE_MESSAGE_SERVICE = Symbol('REALTIME_ASSISTIVE_MES
 
 export const REALTIME_EVENT = {
   JOIN_ROOM: 'join-room',
+  GAME_ITEM_USE: 'game-item-use',
+  GAME_ITEM_USED: 'game-item-used',
+  GAME_ITEM_ERROR: 'game-item-error',
   ROOM_PARTICIPANTS_UPDATED: 'room-participants-updated',
   GAME_STARTED: 'game-started',
   CODE_CHANGE: 'code-change',
@@ -32,4 +35,18 @@ export const REALTIME_CLOSE_REASON = {
   AUTH_TOKEN_INVALID: 'AUTH_TOKEN_INVALID',
   FORBIDDEN_RESOURCE_ACCESS: 'FORBIDDEN_RESOURCE_ACCESS',
   GAME_ROOM_NOT_FOUND: 'GAME_ROOM_NOT_FOUND',
+} as const;
+
+export const GAME_ITEM_ERROR_MESSAGES = {
+  INVALID_GAME_ITEM_REQUEST: 'Invalid game item request.',
+  AUTH_REQUIRED: 'An authenticated room session is required.',
+  FORBIDDEN_RESOURCE_ACCESS: 'Active access to this room is required.',
+  GAME_ROOM_NOT_FOUND: 'Game room was not found.',
+  GAME_ROOM_NOT_IN_PROGRESS: 'The game room is not in progress.',
+  TURN_MISMATCH: 'The requested turn is not the current room turn.',
+  TURN_PLAYER_REQUIRED: 'Only the current turn player can use an item.',
+  TURN_NOT_IN_PROGRESS: 'The turn is no longer in progress.',
+  TURN_DEADLINE_EXPIRED: 'The turn deadline has elapsed.',
+  GAME_ITEM_EXHAUSTED: 'No time extension items remain in this room.',
+  GAME_ITEM_INTERNAL_ERROR: 'Unable to confirm item use. Synchronize room state before trying again.',
 } as const;

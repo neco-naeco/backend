@@ -9,13 +9,14 @@ import { GameStartFlowService } from './game-start-flow.service';
 import { GameRoomsService } from './game-rooms.service';
 
 describe('GameStartFlowService', () => {
-  it('broadcasts game-started and game-state-updated with initial editor file metadata', async () => {
+  it.each([GameMode.MULTIPLAYER, GameMode.PRACTICE])('broadcasts initial inventory and editor metadata for %s', async (mode) => {
     const gameRoomsService: jest.Mocked<Pick<GameRoomsService, 'startGame'>> = {
       startGame: jest.fn().mockResolvedValue({
+        items: [{ itemType: 'TIME_EXTENSION_30', remainingQuantity: 1 }],
         gameRoom: {
           id: 'room-1',
           status: GameRoomStatus.IN_PROGRESS,
-          mode: GameMode.MULTIPLAYER,
+          mode,
           difficulty: 'EASY',
           timeLimitSeconds: 30,
           maxStrikeCount: 3,
@@ -90,8 +91,9 @@ describe('GameStartFlowService', () => {
     expect(realtimeEventSupportService.publishGameStarted).toHaveBeenCalledWith(
       expect.objectContaining({
         gameRoomId: 'room-1',
-        mode: GameMode.MULTIPLAYER,
+        mode,
         gameState: expect.objectContaining({
+          items: [{ itemType: 'TIME_EXTENSION_30', remainingQuantity: 1 }],
           status: GameRoomStatus.IN_PROGRESS,
           turnState: expect.objectContaining({
             turnId: 'turn-1',
@@ -125,7 +127,9 @@ describe('GameStartFlowService', () => {
       }),
     );
     expect(realtimeEventSupportService.publishGameStateUpdated).toHaveBeenCalledWith(
-      expect.objectContaining({ mode: GameMode.MULTIPLAYER }),
+      expect.objectContaining({ mode, gameState: expect.objectContaining({
+        items: [{ itemType: 'TIME_EXTENSION_30', remainingQuantity: 1 }],
+      }) }),
     );
     expect(result.gameRoomMission.id).toBe('mission-1');
   });

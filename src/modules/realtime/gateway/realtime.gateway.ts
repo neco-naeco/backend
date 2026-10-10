@@ -1,5 +1,9 @@
+import { isUUID } from 'class-validator';
+import { GameItemType } from '@shared/enums';
+import { GameRoomItemsService } from '@modules/game-room-items/service/game-room-items.service';
 import {
   ConflictException,
+  HttpException,
   ForbiddenException,
   Inject,
   Logger,
@@ -17,6 +21,7 @@ import {
 import WebSocket from 'ws';
 import { toSeoulIso } from '../../../common';
 import {
+  GAME_ITEM_ERROR_MESSAGES,
   REALTIME_AUTH_SERVICE,
   REALTIME_CLOSE_CODE,
   REALTIME_CLOSE_REASON,
@@ -28,6 +33,10 @@ import {
   REALTIME_TURN_SUBMIT_SERVICE,
 } from '../service/realtime.constants';
 import {
+  GameItemUsePayload,
+  GameItemUsedEvent,
+  GameItemErrorEvent,
+  GameItemErrorCode,
   CodeChangePayload,
   CodeUpdatedEvent,
   GameStartedEvent,
@@ -66,6 +75,7 @@ export class RealtimeGateway implements OnGatewayDisconnect {
   private readonly socketSessions = new WeakMap<WebSocket, SocketSession>();
 
   constructor(
+    private readonly gameRoomItemsService: GameRoomItemsService,
     @Inject(REALTIME_AUTH_SERVICE)
     private readonly authService: RealtimeAuthService,
     @Inject(REALTIME_ROOM_ACCESS_SERVICE)
@@ -80,6 +90,77 @@ export class RealtimeGateway implements OnGatewayDisconnect {
     private readonly supportStateStore: RealtimeSupportStateStore,
     @Optional() private readonly teamChatService?: TeamChatService,
   ) {}
+
+  @SubscribeMessage(REALTIME_EVENT.GAME_ITEM_USE)
+  async handleGameItemUse(
+    @ConnectedSocket() client: WebSocket,
+    @MessageBody() payload: unknown,
+  ): Promise<void> {
+    const candidate = typeof payload === 'object' && payload !== null && !Array.isArray(payload)
+      ? payload as Record<string, unknown>
+      : {};
+    const correlation = {
+      gameRoomId: typeof candidate.gameRoomId === 'string' && isUUID(candidate.gameRoomId) ? candidate.gameRoomId : null,
+      turnId: typeof candidate.turnId === 'string' && isUUID(candidate.turnId) ? candidate.turnId : null,
+      itemType: candidate.itemType === GameItemType.TIME_EXTENSION_30 ? GameItemType.TIME_EXTENSION_30 : null,
+    };
+    const reject = (code: GameItemErrorCode) => this.sendGameItemEvent(client, REALTIME_EVENT.GAME_ITEM_ERROR, {
+      ...correlation, code, message: GAME_ITEM_ERROR_MESSAGES[code], occurredAt: toSeoulIso(new Date()),
+    });
+    if (!correlation.gameRoomId || !correlation.turnId || !correlation.itemType) {
+      reject('INVALID_GAME_ITEM_REQUEST');
+      return;
+    }
+    const session = this.socketSessions.get(client);
+    if (!session) {
+      reject('AUTH_REQUIRED');
+      return;
+    }
+    if (session.gameRoomId !== correlation.gameRoomId) {
+      reject('FORBIDDEN_RESOURCE_ACCESS');
+      return;
+    }
+
+    let result: GameItemUsedEvent;
+    try {
+      const request: GameItemUsePayload = {
+        gameRoomId: correlation.gameRoomId,
+        turnId: correlation.turnId,
+        itemType: correlation.itemType,
+      };
+      result = await this.gameRoomItemsService.useItem({ ...request, userId: session.userId });
+    } catch (error) {
+      const response = error instanceof HttpException ? error.getResponse() : null;
+      const code = response && typeof response === 'object' && 'code' in response ? response.code : null;
+      if (typeof code === 'string' && Object.prototype.hasOwnProperty.call(GAME_ITEM_ERROR_MESSAGES, code)) {
+        reject(code as GameItemErrorCode);
+      } else {
+        this.logger.warn('Game item processing failed; requester must synchronize room state.');
+        reject('GAME_ITEM_INTERNAL_ERROR');
+      }
+      return;
+    }
+
+    // The use transaction has committed. Delivery failures must never retry use or report rollback.
+    for (const roomSocket of this.roomSessions.get(result.gameRoomId) ?? []) {
+      this.sendGameItemEvent(roomSocket, REALTIME_EVENT.GAME_ITEM_USED, result);
+    }
+  }
+
+  private sendGameItemEvent(
+    client: WebSocket,
+    event: typeof REALTIME_EVENT.GAME_ITEM_USED | typeof REALTIME_EVENT.GAME_ITEM_ERROR,
+    data: GameItemUsedEvent | GameItemErrorEvent,
+  ): void {
+    if (client.readyState !== WebSocket.OPEN) return;
+    try {
+      client.send(JSON.stringify({ event, data }), (error) => {
+        if (error) this.logger.warn(`Failed to deliver ${event}; room state synchronization is required.`);
+      });
+    } catch {
+      this.logger.warn(`Failed to deliver ${event}; room state synchronization is required.`);
+    }
+  }
 
   @SubscribeMessage(REALTIME_EVENT.SEND_TEAM_CHAT_MESSAGE)
   async handleTeamChatMessage(

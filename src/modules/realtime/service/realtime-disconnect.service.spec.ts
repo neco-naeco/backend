@@ -129,6 +129,7 @@ describe('DatabaseRealtimeDisconnectService', () => {
         gameRoomId: 'room-1',
         turnId: 'turn-1',
         userId: 'user-1',
+        reason: 'DISCONNECT',
         suppressNextTurnCreation: true,
       }),
     );
@@ -226,6 +227,7 @@ describe('DatabaseRealtimeDisconnectService', () => {
 
     expect(turnsService.timeoutTurn).toHaveBeenCalledWith(
       expect.objectContaining({
+        reason: 'DISCONNECT',
         suppressNextTurnCreation: false,
       }),
     );

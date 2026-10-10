@@ -39,6 +39,7 @@ export class GameStartFlowService {
       ),
     };
     const gameState = {
+      items: result.items,
       status: result.gameRoom.status,
       strikeCount: result.gameRoomMission.strikeCount,
       maxStrikeCount: result.gameRoom.maxStrikeCount,

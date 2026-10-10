@@ -8,6 +8,7 @@ users
 
 game_rooms
  └─ game_room_participants
+ └─ game_room_items
  └─ game_room_missions
      └─ game_room_mission_steps
      └─ turns
@@ -33,6 +34,7 @@ Persistent tables currently defined in the ERD:
 
 - `game_rooms`
 - `game_room_participants`
+- `game_room_items` (target addition for the game-item MVP)
 - `docker_images`
 - `docker_image_deployments`
 - `mission_templates`
@@ -87,6 +89,8 @@ Constraint intent notes:
 
 Durable:
 
+- game-room item inventory and usage counts
+- current turn deadlines, including committed time extensions
 - turn-end snapshots
 - execution results
 - mission results
@@ -104,3 +108,26 @@ Ephemeral or cache-like:
 - `game_room_participants.membership_status` must encode invite lifecycle.
 - `game_room_missions.current_step_id` points to the active room mission step.
 - `executions` ties runtime work back to room, mission, turn, and user context.
+
+## Game Room Items (TASK 1 Target Model)
+
+This defines the schema contract for TASK 2; the table is not implemented by this documentation change.
+
+| Column | Type | Meaning |
+|---|---|---|
+| `id` | UUID primary key | Server-generated inventory row ID. |
+| `game_room_id` | UUID foreign key to `game_rooms.id` | Room that owns the shared inventory. |
+| `item_type` | text | Application enum; MVP supports only `TIME_EXTENSION_30`. |
+| `quantity` | integer, default 1 | Remaining quantity, not the initial allocation. |
+| `used_count` | integer, default 0 | Number of committed uses in this room. |
+| `updated_at` | timestamptz | Last inventory update timestamp. |
+
+- Enforce `UNIQUE(game_room_id, item_type)` and nonnegative `quantity` / `used_count` with database constraints.
+- Use `ON DELETE CASCADE` for the room foreign key. Finishing a game does not delete its room or inventory.
+- Start allocation is `(quantity, used_count) = (1, 0)`; a successful use changes it to `(0, 1)`. With no refill in MVP, the allocation sum remains 1.
+- Persist allocation inside the game-start transaction for both multiplayer and personal practice. A failed start rolls it back. Normal entity audit columns may follow the shared base-entity convention.
+- Persist decrement, usage increment, and `turns.deadline_at + 30 seconds` atomically, locking the turn before inventory. No in-memory cache is authoritative for availability.
+- Do not reset inventory on turn/step transitions, reads, reconnects, or application restarts. Do not backfill games already started before deployment. Waiting rooms receive allocation when successfully started after deployment.
+- An absent inventory row means unavailable, not an instruction to grant an item. API snapshots normalize it to `remainingQuantity: 0`; the public field maps to `quantity`, not `quantity - used_count`.
+- Durability across database/container restart requires persistent PostgreSQL storage. Development PostgreSQL now uses a named volume; TASK 10 migrated the existing tmpfs data through a verified backup/restore before switching containers.
+- Event types, validation ordering, and recovery rules are defined in [Game Item MVP Contract](05-api-and-realtime.md#game-item-mvp-contract-task-1).

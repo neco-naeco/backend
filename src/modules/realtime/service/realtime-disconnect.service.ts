@@ -96,6 +96,7 @@ export class DatabaseRealtimeDisconnectService implements RealtimeDisconnectServ
         turnId: turn.id,
       });
       const result = await this.turnsService.timeoutTurn({
+        reason: 'DISCONNECT',
         gameRoomId: turn.gameRoomId,
         turnId: turn.id,
         userId: turn.playerUserId,

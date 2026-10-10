@@ -1,9 +1,27 @@
+import type { GameItemState } from '@modules/game-room-items/game-item-state';
+import type { GameItemUseResult, UseGameItemInput } from '@modules/game-room-items/service/game-room-items.service';
+import type { GameItemType } from '@shared/enums';
+import type { GAME_ITEM_ERROR_MESSAGES } from './realtime.constants';
 import {
   AiRealtimeEventType,
   GameMode,
   GameRoomParticipantMembershipStatus,
   GameRoomParticipantRole,
 } from '../../../shared/enums';
+
+export type GameItemUsePayload = Pick<UseGameItemInput, 'gameRoomId' | 'turnId' | 'itemType'>;
+export type GameItemUsedEvent = GameItemUseResult;
+export type GameItemErrorCode = keyof typeof GAME_ITEM_ERROR_MESSAGES;
+export interface GameItemErrorEvent {
+  gameRoomId: string | null;
+  turnId: string | null;
+  itemType: GameItemType | null;
+  code: GameItemErrorCode;
+  message: string;
+  occurredAt: string;
+}
+
+
 
 export interface JoinRoomPayload {
   accessToken: string;
@@ -58,7 +76,7 @@ export interface RoomParticipantsUpdatedEvent {
   gameRoomId: string;
   participants: RoomParticipantView[];
   changedParticipant: RoomParticipantView | null;
-  gameState: Record<string, unknown>;
+  gameState: Record<string, unknown> & { items?: GameItemState[] };
   missionState: RealtimeMissionState | null;
   occurredAt: string;
 }
@@ -186,7 +204,7 @@ export interface RealtimeTurnState {
 export interface GameStartedEvent {
   gameRoomId: string;
   mode: GameMode;
-  gameState: Record<string, unknown>;
+  gameState: Record<string, unknown> & { items?: GameItemState[] };
   missionState: RealtimeMissionState;
   uiHints: Record<string, unknown>;
   occurredAt: string;
@@ -213,7 +231,7 @@ export interface TurnChangedEvent {
 export interface GameStateUpdatedEvent {
   gameRoomId: string;
   mode: GameMode;
-  gameState: Record<string, unknown>;
+  gameState: Record<string, unknown> & { items?: GameItemState[] };
   missionState?: Record<string, unknown> | null;
   occurredAt: string;
   aiNotice?: RealtimeAssistiveNotice | null;
