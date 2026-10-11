@@ -19,6 +19,7 @@ import { GameRoomParticipantsModule } from './modules/game-room-participants/gam
 import { RealtimeModule } from './modules/realtime/realtime.module';
 import { GameRoomItemsModule } from './modules/game-room-items/game-room-items.module';
 import { TeamChatModule } from './modules/team-chat/team-chat.module';
+import { RankingsModule } from './modules/rankings/rankings.module';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { TeamChatModule } from './modules/team-chat/team-chat.module';
     RealtimeModule,
     TeamChatModule,
     GameRoomItemsModule,
+    RankingsModule,
   ],
   providers: [
     {
