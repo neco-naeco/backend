@@ -4,6 +4,7 @@ import type {
   GameStartCommandDto,
   MissionDifficulty,
   RoomCreateCommandDto,
+  RoomDeleteCommandDto,
   RoomJoinCommandDto,
   UserInviteCommandDto,
   UserInviteDenyCommandDto,
@@ -62,6 +63,8 @@ export class AiChatIntentValidator {
     switch (requestType) {
       case AiChatRequestType.ROOM_CREATE:
         return this.validateRoomCreate(payload, raw.assistantHint);
+      case AiChatRequestType.ROOM_DELETE:
+        return this.validateRoomDelete(payload, raw.assistantHint);
       case AiChatRequestType.USER_INVITE:
         return this.validateUserInvite(payload, raw.assistantHint);
       case AiChatRequestType.ROOM_JOIN:
@@ -124,6 +127,20 @@ export class AiChatIntentValidator {
     const command: UserInviteCommandDto = {
       requestType: AiChatRequestType.USER_INVITE,
       inviteeNicknames,
+      ...(this.readOptionalString(payload.gameRoomId)
+        ? { gameRoomId: this.readOptionalString(payload.gameRoomId) }
+        : {}),
+    };
+
+    return { outcome: 'command', command, assistantHint };
+  }
+
+  private validateRoomDelete(
+    payload: Record<string, unknown>,
+    assistantHint?: string,
+  ): IntentValidationResult {
+    const command: RoomDeleteCommandDto = {
+      requestType: AiChatRequestType.ROOM_DELETE,
       ...(this.readOptionalString(payload.gameRoomId)
         ? { gameRoomId: this.readOptionalString(payload.gameRoomId) }
         : {}),

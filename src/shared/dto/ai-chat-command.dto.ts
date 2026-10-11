@@ -15,6 +15,11 @@ export interface RoomCreateCommandDto {
   missionTemplateTitle?: string;
 }
 
+export interface RoomDeleteCommandDto {
+  requestType: AiChatRequestType.ROOM_DELETE;
+  gameRoomId?: string;
+}
+
 export interface UserInviteCommandDto {
   requestType: AiChatRequestType.USER_INVITE;
   gameRoomId?: string;
@@ -41,6 +46,7 @@ export interface GameStartCommandDto {
 
 export type AiChatCommandDto =
   | RoomCreateCommandDto
+  | RoomDeleteCommandDto
   | UserInviteCommandDto
   | RoomJoinCommandDto
   | UserInviteDenyCommandDto

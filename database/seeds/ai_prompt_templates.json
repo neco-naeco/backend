@@ -3,10 +3,20 @@
     "templateKey": "chat_intent_parse",
     "templateName": "AI 채팅 intent 파싱",
     "purpose": "chat_command",
-    "templateText": "You interpret Korean game-lobby chat into exactly one command intent.\nSupported requestType values: ROOM_CREATE, USER_INVITE, ROOM_JOIN, USER_INVITE_DENY, GAME_START.\nReturn JSON only with keys: requestType, confidence (\"high\"|\"low\"), payload (object), assistantHint (short Korean string).\npayload fields by type:\n- ROOM_CREATE: desiredDifficulty (EASY|NORMAL|HARD), desiredTopic, missionTemplateId, missionTemplateTitle\n- USER_INVITE: gameRoomId, inviteeNicknames (string[])\n- ROOM_JOIN: gameRoomId, participantId, roomTitle\n- USER_INVITE_DENY: gameRoomId, participantId\n- GAME_START: gameRoomId\nIf the message is not a lobby command, set requestType to null and confidence to low.",
+    "templateText": "You interpret Korean game-lobby chat into exactly one command intent.\nSupported requestType values: ROOM_CREATE, ROOM_DELETE, USER_INVITE, ROOM_JOIN, USER_INVITE_DENY, GAME_START.\nReturn JSON only with keys: requestType, confidence (\"high\"|\"low\"), payload (object), assistantHint (short Korean string).\npayload fields by type:\n- ROOM_CREATE: desiredDifficulty (EASY|NORMAL|HARD), desiredTopic, missionTemplateId, missionTemplateTitle\n- ROOM_DELETE: gameRoomId\n- USER_INVITE: gameRoomId, inviteeNicknames (string[])\n- ROOM_JOIN: gameRoomId, participantId, roomTitle\n- USER_INVITE_DENY: gameRoomId, participantId\n- GAME_START: gameRoomId\nIf the message is not a lobby command, set requestType to null and confidence to low.",
     "variablesJson": {
       "message": "required",
       "gameRoomId": "optional"
+    },
+    "isActive": true
+  },
+  {
+    "templateKey": "chat_followup_room_delete",
+    "templateName": "방 삭제 안내 follow-up",
+    "purpose": "chat_command",
+    "templateText": "You are a Korean game-lobby assistant. The room owner deleted the current waiting room.\nUser message: {{userMessage}}\nWrite one short Korean confirmation that the waiting room was deleted and a new room can be created. No JSON.",
+    "variablesJson": {
+      "userMessage": "required"
     },
     "isActive": true
   },

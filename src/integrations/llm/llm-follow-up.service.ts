@@ -80,6 +80,8 @@ export class LlmFollowUpService implements LlmFollowUpGeneratorPort {
           return PROMPT_TEMPLATE_KEY.CHAT_FOLLOWUP_ROOM_SUMMARY;
         }
         return PROMPT_TEMPLATE_KEY.CHAT_FOLLOWUP_ROOM_CREATE;
+      case AiChatRequestType.ROOM_DELETE:
+        return PROMPT_TEMPLATE_KEY.CHAT_FOLLOWUP_ROOM_DELETE;
       case AiChatRequestType.USER_INVITE:
         return PROMPT_TEMPLATE_KEY.CHAT_FOLLOWUP_USER_INVITE;
       case AiChatRequestType.ROOM_JOIN:
@@ -118,6 +120,7 @@ export class LlmFollowUpService implements LlmFollowUpGeneratorPort {
         };
       case AiChatRequestType.USER_INVITE_DENY:
       case AiChatRequestType.GAME_START:
+      case AiChatRequestType.ROOM_DELETE:
         return base;
       default:
         return base;

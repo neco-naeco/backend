@@ -638,6 +638,49 @@ describe('GameRoomsService', () => {
     );
   });
 
+  it('deletes a waiting room when requested by its joined owner', async () => {
+    roomRepository.findOne.mockResolvedValue({
+      id: 'room-1',
+      ownerUserId: 'owner-1',
+      status: GameRoomStatus.WAITING,
+    } as GameRoomEntity);
+    participantRepository.findOne.mockResolvedValue({
+      gameRoomId: 'room-1',
+      userId: 'owner-1',
+      role: GameRoomParticipantRole.OWNER,
+      membershipStatus: GameRoomParticipantMembershipStatus.JOINED,
+    } as GameRoomParticipantEntity);
+
+    await service.deleteWaitingRoom({
+      actorUserId: 'owner-1',
+      gameRoomId: 'room-1',
+    });
+
+    expect(aiChatSessionRepository.update).toHaveBeenCalledWith(
+      { gameRoomId: 'room-1', status: AiChatSessionStatus.ACTIVE },
+      { gameRoomId: null },
+    );
+    expect(roomRepository.delete).toHaveBeenCalledWith('room-1');
+  });
+
+  it('rejects deleting a waiting room by a non-owner', async () => {
+    roomRepository.findOne.mockResolvedValue({
+      id: 'room-1',
+      ownerUserId: 'owner-1',
+      status: GameRoomStatus.WAITING,
+    } as GameRoomEntity);
+    participantRepository.findOne.mockResolvedValue(null);
+
+    await expect(
+      service.deleteWaitingRoom({
+        actorUserId: 'participant-1',
+        gameRoomId: 'room-1',
+      }),
+    ).rejects.toMatchObject({ status: 403 });
+
+    expect(roomRepository.delete).not.toHaveBeenCalled();
+  });
+
   it('does not discard a non-practice room during failed practice cleanup', async () => {
     roomRepository.findOne.mockResolvedValue({
       id: 'room-1',
