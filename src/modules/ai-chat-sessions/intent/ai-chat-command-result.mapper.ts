@@ -89,6 +89,10 @@ export class AiChatCommandResultMapper {
     switch (command.requestType) {
       case AiChatRequestType.ROOM_CREATE:
         return '/v1/game-rooms';
+      case AiChatRequestType.ROOM_DELETE:
+        return command.gameRoomId
+          ? `/v1/game-rooms/${command.gameRoomId}`
+          : '/v1/game-rooms/{gameRoomId}';
       case AiChatRequestType.USER_INVITE:
         return command.gameRoomId
           ? `/v1/game-rooms/${command.gameRoomId}/invite`

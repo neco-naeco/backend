@@ -87,6 +87,7 @@ describe('AiChatSessionsService', () => {
 
     gameRoomsService = {
       createRoom: jest.fn(),
+      deleteWaitingRoom: jest.fn(),
       startGame: jest.fn(),
       listAccessibleRooms: jest.fn(),
     } as unknown as jest.Mocked<GameRoomsService>;
@@ -564,6 +565,38 @@ describe('AiChatSessionsService', () => {
           status: AiChatCommandResultStatus.SUCCESS,
           gameRoomId: 'room-1',
           participants: null,
+          started: false,
+        },
+      });
+    });
+
+    it('deletes the current waiting room for ROOM_DELETE', async () => {
+      aiChatSessionRepository.findOne.mockResolvedValue({
+        id: sessionId,
+        requesterUserId: user.userId,
+        gameRoomId: 'room-1',
+      } as AiChatSession);
+      llmIntentParser.parseUserMessage.mockResolvedValue({
+        requestType: 'ROOM_DELETE',
+        payload: {},
+      });
+      mockTransactions();
+
+      const result = await service.createMessage(user, sessionId, {
+        message: '방 삭제해줘',
+      });
+
+      expect(gameRoomsService.deleteWaitingRoom).toHaveBeenCalledWith({
+        actorUserId: user.userId,
+        gameRoomId: 'room-1',
+      });
+      expect(result).toMatchObject({
+        requestType: AiChatRequestType.ROOM_DELETE,
+        requestStatus: AiChatRequestStatus.COMPLETED,
+        commandResult: {
+          commandType: AiChatRequestType.ROOM_DELETE,
+          status: AiChatCommandResultStatus.SUCCESS,
+          gameRoomId: 'room-1',
           started: false,
         },
       });

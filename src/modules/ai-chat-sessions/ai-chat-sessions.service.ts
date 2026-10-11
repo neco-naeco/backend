@@ -37,6 +37,7 @@ import {
   type AiChatCommandDto,
   type GameStartCommandDto,
   type RoomCreateCommandDto,
+  type RoomDeleteCommandDto,
   type RoomJoinCommandDto,
   type UserInviteCommandDto,
   type UserInviteDenyCommandDto,
@@ -597,6 +598,8 @@ export class AiChatSessionsService {
     switch (command.requestType) {
       case AiChatRequestType.ROOM_CREATE:
         return this.executeRoomCreate(user, session, command);
+      case AiChatRequestType.ROOM_DELETE:
+        return this.executeRoomDelete(user, session, command);
       case AiChatRequestType.USER_INVITE:
         return this.executeUserInvite(user, session, command);
       case AiChatRequestType.ROOM_JOIN:
@@ -707,6 +710,51 @@ export class AiChatSessionsService {
         }),
         nextSessionGameRoomId: resolvedGameRoomId,
         followUpGameRoomId: resolvedGameRoomId,
+      };
+    } catch (error) {
+      return this.toFailedExecutionOutcome(resolvedCommand, resolvedGameRoomId, error);
+    }
+  }
+
+  private async executeRoomDelete(
+    user: AuthenticatedUser,
+    session: AiChatSession,
+    command: RoomDeleteCommandDto,
+  ): Promise<CommandExecutionOutcome> {
+    const resolvedGameRoomId =
+      command.gameRoomId ??
+      session.gameRoomId ??
+      (await this.resolveOwnedRoomId(user.userId));
+
+    if (!resolvedGameRoomId) {
+      return this.buildStaticExecutionFailure(
+        command,
+        null,
+        'ROOM_NOT_FOUND',
+        '삭제할 대기방을 찾지 못했습니다.',
+      );
+    }
+
+    const resolvedCommand: RoomDeleteCommandDto = {
+      ...command,
+      gameRoomId: resolvedGameRoomId,
+    };
+
+    try {
+      await this.gameRoomsService.deleteWaitingRoom({
+        actorUserId: user.userId,
+        gameRoomId: resolvedGameRoomId,
+      });
+
+      return {
+        requestStatus: AiChatRequestStatus.COMPLETED,
+        command: resolvedCommand,
+        commandResult: this.commandResultMapper.toSuccessResult(resolvedCommand, {
+          gameRoomId: resolvedGameRoomId,
+          started: false,
+        }),
+        nextSessionGameRoomId: null,
+        followUpGameRoomId: null,
       };
     } catch (error) {
       return this.toFailedExecutionOutcome(resolvedCommand, resolvedGameRoomId, error);

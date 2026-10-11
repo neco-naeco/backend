@@ -14,6 +14,7 @@ import type {
 
 const SUPPORTED_REQUEST_TYPES = [
   'ROOM_CREATE',
+  'ROOM_DELETE',
   'USER_INVITE',
   'ROOM_JOIN',
   'USER_INVITE_DENY',
@@ -25,6 +26,7 @@ Supported requestType values: ${SUPPORTED_REQUEST_TYPES.join(', ')}.
 Return JSON only with keys: requestType, confidence ("high"|"low"), payload (object), assistantHint (short Korean string).
 payload fields by type:
 - ROOM_CREATE: desiredDifficulty (EASY|NORMAL|HARD), desiredTopic, missionTemplateId, missionTemplateTitle
+- ROOM_DELETE: gameRoomId
 - USER_INVITE: gameRoomId, inviteeNicknames (string[])
 - ROOM_JOIN: gameRoomId, participantId, roomTitle
 - USER_INVITE_DENY: gameRoomId, participantId
@@ -102,6 +104,15 @@ export class LlmIntentParserService implements LlmIntentParserPort {
   /** Deterministic fallback for local dev and tests when LLM is unavailable. */
   parseWithHeuristics(message: string): LlmIntentRawResponse {
     const normalized = message.trim();
+
+    if (/(방|room).*(없애|삭제|지워|닫아|폐쇄|delete|remove|close)|(없애|삭제|지워|닫아|폐쇄).*(방|room)/i.test(normalized)) {
+      return {
+        requestType: 'ROOM_DELETE',
+        confidence: 'high',
+        payload: {},
+        assistantHint: '현재 대기방 삭제 요청으로 이해했어요.',
+      };
+    }
 
     if (/거절|거부|decline/i.test(normalized)) {
       return {

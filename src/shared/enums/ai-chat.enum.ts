@@ -6,6 +6,7 @@ export enum AiChatSessionStatus {
 
 export enum AiChatRequestType {
   ROOM_CREATE = 'ROOM_CREATE',
+  ROOM_DELETE = 'ROOM_DELETE',
   USER_INVITE = 'USER_INVITE',
   ROOM_JOIN = 'ROOM_JOIN',
   USER_INVITE_DENY = 'USER_INVITE_DENY',

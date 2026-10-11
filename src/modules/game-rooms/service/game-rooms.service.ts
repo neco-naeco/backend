@@ -116,6 +116,38 @@ export class GameRoomsService {
     });
   }
 
+  async deleteWaitingRoom(input: {
+    actorUserId: string;
+    gameRoomId: string;
+  }): Promise<void> {
+    await this.dataSource.transaction(async (manager) => {
+      await this.acquireRoomLifecycleLock(manager, input.gameRoomId);
+      await this.acquireWaitingRoomLock(manager, input.actorUserId);
+
+      const roomRepository = manager.getRepository(GameRoomEntity);
+      const gameRoom = await this.getRoomOrThrow(roomRepository, input.gameRoomId);
+
+      if (gameRoom.status !== GameRoomStatus.WAITING) {
+        throw new ConflictException({
+          code: 'GAME_ROOM_NOT_WAITING',
+          message: 'Only a waiting room can be deleted.',
+        });
+      }
+
+      await this.ensureActiveOwnerMembership(
+        manager.getRepository(GameRoomParticipantEntity),
+        gameRoom,
+        input.actorUserId,
+      );
+
+      await manager.getRepository(AiChatSession).update(
+        { gameRoomId: gameRoom.id, status: AiChatSessionStatus.ACTIVE },
+        { gameRoomId: null },
+      );
+      await roomRepository.delete(gameRoom.id);
+    });
+  }
+
   async finishRoomIfBelowMinParticipants(gameRoomId: string): Promise<{
     finished: boolean;
     room: GameRoomEntity;

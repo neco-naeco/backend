@@ -69,6 +69,11 @@ export function buildCommandAssistantContent(
           ...(command.missionTemplateId ? { missionTemplateId: command.missionTemplateId } : {}),
         },
       };
+    case AiChatRequestType.ROOM_DELETE:
+      return {
+        content: '대기방을 삭제했어요. 새로운 방을 만들 수 있어요.',
+        metadata: command.gameRoomId ? { gameRoomId: command.gameRoomId } : null,
+      };
     case AiChatRequestType.USER_INVITE:
       return {
         content: `${command.inviteeNicknames.join(', ')} 님을 초대할게요.`,

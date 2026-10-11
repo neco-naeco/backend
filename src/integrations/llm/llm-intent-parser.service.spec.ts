@@ -56,6 +56,16 @@ describe('LlmIntentParserService', () => {
     expect(result.payload).toMatchObject({ desiredDifficulty: 'EASY' });
   });
 
+  it.each(['방 없애줘', '지금 방 삭제해줘', 'room delete']) (
+    'heuristically parses ROOM_DELETE message: %s',
+    async (message) => {
+      const result = await service.parseUserMessage({ message });
+
+      expect(result.requestType).toBe('ROOM_DELETE');
+      expect(result.payload).toEqual({});
+    },
+  );
+
   it('heuristically parses USER_INVITE messages', async () => {
     const result = await service.parseUserMessage({ message: '@코딩고수 초대해줘' });
     expect(result.requestType).toBe('USER_INVITE');

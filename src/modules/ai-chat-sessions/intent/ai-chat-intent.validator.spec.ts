@@ -23,6 +23,22 @@ describe('AiChatIntentValidator', () => {
     });
   });
 
+  it('maps ROOM_DELETE with an optional room id', () => {
+    const result = validator.validate({
+      requestType: 'ROOM_DELETE',
+      payload: { gameRoomId: 'room-1' },
+    });
+
+    expect(result).toEqual({
+      outcome: 'command',
+      command: {
+        requestType: AiChatRequestType.ROOM_DELETE,
+        gameRoomId: 'room-1',
+      },
+      assistantHint: undefined,
+    });
+  });
+
   it('maps mission template selection through ROOM_CREATE', () => {
     const result = validator.validate({
       requestType: 'ROOM_CREATE',
