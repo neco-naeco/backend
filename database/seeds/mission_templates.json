@@ -229,5 +229,127 @@
         }
       ]
     }
+  },
+  {
+    "id": "44444444-4444-4444-8444-444444444444",
+    "title": "학생 성적 분석기",
+    "description": "점수 목록을 읽어 합계, 평균, 최댓값·최솟값, 등급, 합격자, 정렬 결과를 단계별로 구현합니다.",
+    "language": "python",
+    "difficulty": "NORMAL",
+    "defaultTimeLimitSeconds": 300,
+    "defaultMaxStrikeCount": 3,
+    "dockerImageId": "11111111-1111-4111-8111-111111111111",
+    "successCriteria": "여섯 종류의 성적 분석 명령을 처리하고 명령별 결과만 정확히 한 줄로 출력합니다.",
+    "judgePolicyJson": {
+      "judgeType": "PUBLIC_TEST_CASES",
+      "language": "python",
+      "runtime": { "entryFilePath": "main.py", "command": "python /workspace/main.py", "stdinMode": "lines", "promptFree": true },
+      "comparisonPolicy": { "stdout": "trim-exact", "stderr": "must-be-empty", "exitCode": 0 },
+      "steps": [
+        { "stepOrder": 1, "testCases": [
+          { "name": "sum_scores", "stdinLines": ["SUM", "80 95 65 70"], "expectedStdout": "310" },
+          { "name": "sum_single_score", "stdinLines": ["SUM", "100"], "expectedStdout": "100" }
+        ] },
+        { "stepOrder": 2, "testCases": [
+          { "name": "sum_scores", "stdinLines": ["SUM", "80 95 65 70"], "expectedStdout": "310" },
+          { "name": "average_decimal", "stdinLines": ["AVERAGE", "80 95 65 70"], "expectedStdout": "77.5" },
+          { "name": "average_integer", "stdinLines": ["AVERAGE", "80 90"], "expectedStdout": "85" }
+        ] },
+        { "stepOrder": 3, "testCases": [
+          { "name": "sum_scores", "stdinLines": ["SUM", "80 95 65 70"], "expectedStdout": "310" },
+          { "name": "average_decimal", "stdinLines": ["AVERAGE", "80 95 65 70"], "expectedStdout": "77.5" },
+          { "name": "minmax_scores", "stdinLines": ["MINMAX", "80 95 65 70"], "expectedStdout": "65 95" }
+        ] },
+        { "stepOrder": 4, "testCases": [
+          { "name": "sum_scores", "stdinLines": ["SUM", "80 95 65 70"], "expectedStdout": "310" },
+          { "name": "average_decimal", "stdinLines": ["AVERAGE", "80 95 65 70"], "expectedStdout": "77.5" },
+          { "name": "minmax_scores", "stdinLines": ["MINMAX", "80 95 65 70"], "expectedStdout": "65 95" },
+          { "name": "letter_grades", "stdinLines": ["GRADES", "95 84 72 61 50"], "expectedStdout": "A B C D F" }
+        ] },
+        { "stepOrder": 5, "testCases": [
+          { "name": "sum_scores", "stdinLines": ["SUM", "80 95 65 70"], "expectedStdout": "310" },
+          { "name": "average_decimal", "stdinLines": ["AVERAGE", "80 95 65 70"], "expectedStdout": "77.5" },
+          { "name": "minmax_scores", "stdinLines": ["MINMAX", "80 95 65 70"], "expectedStdout": "65 95" },
+          { "name": "letter_grades", "stdinLines": ["GRADES", "95 84 72 61 50"], "expectedStdout": "A B C D F" },
+          { "name": "passed_scores", "stdinLines": ["PASSED", "55 80 59 60 100"], "expectedStdout": "80 60 100" }
+        ] },
+        { "stepOrder": 6, "testCases": [
+          { "name": "sum_scores", "stdinLines": ["SUM", "80 95 65 70"], "expectedStdout": "310" },
+          { "name": "average_decimal", "stdinLines": ["AVERAGE", "80 95 65 70"], "expectedStdout": "77.5" },
+          { "name": "minmax_scores", "stdinLines": ["MINMAX", "80 95 65 70"], "expectedStdout": "65 95" },
+          { "name": "letter_grades", "stdinLines": ["GRADES", "95 84 72 61 50"], "expectedStdout": "A B C D F" },
+          { "name": "passed_scores", "stdinLines": ["PASSED", "55 80 59 60 100"], "expectedStdout": "80 60 100" },
+          { "name": "sorted_scores", "stdinLines": ["SORTED", "70 95 65 80"], "expectedStdout": "95 80 70 65" }
+        ] }
+      ]
+    },
+    "projectStructureJson": {
+      "rootPath": "/workspace",
+      "entryFilePath": "main.py",
+      "files": [
+        { "filePath": "main.py", "language": "python", "readonly": false, "content": "def main():\n    # 첫 줄의 분석 명령과 둘째 줄의 점수 목록을 읽으세요.\n    # 현재 단계에서 요구하는 명령의 결과만 한 줄로 출력하세요.\n    pass\n\n\nif __name__ == \"__main__\":\n    main()\n" },
+        { "filePath": "README.md", "language": "markdown", "readonly": true, "content": "# 학생 성적 분석기\n\n첫 줄에는 분석 명령, 둘째 줄에는 공백으로 구분한 정수 점수가 주어집니다.\n\n명령: `SUM`, `AVERAGE`, `MINMAX`, `GRADES`, `PASSED`, `SORTED`\n\n평균이 정수이면 `.0` 없이 출력하고, 합격 기준은 60점 이상입니다. 정렬은 내림차순입니다.\n" }
+      ]
+    }
+  },
+  {
+    "id": "55555555-5555-4555-8555-555555555555",
+    "title": "은행 계좌 시스템",
+    "description": "여러 계좌의 입금, 출금, 이체, 잔액 조회, 거래 내역과 오류 처리를 단계별로 구현합니다.",
+    "language": "python",
+    "difficulty": "HARD",
+    "defaultTimeLimitSeconds": 300,
+    "defaultMaxStrikeCount": 3,
+    "dockerImageId": "11111111-1111-4111-8111-111111111111",
+    "successCriteria": "EOF까지 명령을 순서대로 처리하고 각 명령의 결과를 정확히 한 줄씩 출력합니다.",
+    "judgePolicyJson": {
+      "judgeType": "PUBLIC_TEST_CASES",
+      "language": "python",
+      "runtime": { "entryFilePath": "main.py", "command": "python /workspace/main.py", "stdinMode": "lines", "promptFree": true },
+      "comparisonPolicy": { "stdout": "trim-exact", "stderr": "must-be-empty", "exitCode": 0 },
+      "steps": [
+        { "stepOrder": 1, "testCases": [
+          { "name": "deposit_new_and_existing", "stdinLines": ["DEPOSIT 철수 1000", "DEPOSIT 철수 500"], "expectedStdout": "철수 1000\n철수 1500" }
+        ] },
+        { "stepOrder": 2, "testCases": [
+          { "name": "deposit_new_and_existing", "stdinLines": ["DEPOSIT 철수 1000", "DEPOSIT 철수 500"], "expectedStdout": "철수 1000\n철수 1500" },
+          { "name": "withdraw_and_insufficient", "stdinLines": ["DEPOSIT 철수 1000", "WITHDRAW 철수 300", "WITHDRAW 철수 800"], "expectedStdout": "철수 1000\n철수 700\nERROR: insufficient funds" }
+        ] },
+        { "stepOrder": 3, "testCases": [
+          { "name": "deposit_new_and_existing", "stdinLines": ["DEPOSIT 철수 1000", "DEPOSIT 철수 500"], "expectedStdout": "철수 1000\n철수 1500" },
+          { "name": "withdraw_and_insufficient", "stdinLines": ["DEPOSIT 철수 1000", "WITHDRAW 철수 300", "WITHDRAW 철수 800"], "expectedStdout": "철수 1000\n철수 700\nERROR: insufficient funds" },
+          { "name": "transfer_accounts", "stdinLines": ["DEPOSIT 철수 1000", "TRANSFER 철수 영희 250"], "expectedStdout": "철수 1000\n철수 750 -> 영희 250" }
+        ] },
+        { "stepOrder": 4, "testCases": [
+          { "name": "deposit_new_and_existing", "stdinLines": ["DEPOSIT 철수 1000", "DEPOSIT 철수 500"], "expectedStdout": "철수 1000\n철수 1500" },
+          { "name": "withdraw_and_insufficient", "stdinLines": ["DEPOSIT 철수 1000", "WITHDRAW 철수 300", "WITHDRAW 철수 800"], "expectedStdout": "철수 1000\n철수 700\nERROR: insufficient funds" },
+          { "name": "transfer_accounts", "stdinLines": ["DEPOSIT 철수 1000", "TRANSFER 철수 영희 250"], "expectedStdout": "철수 1000\n철수 750 -> 영희 250" },
+          { "name": "balance_query", "stdinLines": ["DEPOSIT 철수 900", "WITHDRAW 철수 200", "BALANCE 철수"], "expectedStdout": "철수 900\n철수 700\n철수 700" }
+        ] },
+        { "stepOrder": 5, "testCases": [
+          { "name": "deposit_new_and_existing", "stdinLines": ["DEPOSIT 철수 1000", "DEPOSIT 철수 500"], "expectedStdout": "철수 1000\n철수 1500" },
+          { "name": "withdraw_and_insufficient", "stdinLines": ["DEPOSIT 철수 1000", "WITHDRAW 철수 300", "WITHDRAW 철수 800"], "expectedStdout": "철수 1000\n철수 700\nERROR: insufficient funds" },
+          { "name": "transfer_accounts", "stdinLines": ["DEPOSIT 철수 1000", "TRANSFER 철수 영희 250"], "expectedStdout": "철수 1000\n철수 750 -> 영희 250" },
+          { "name": "balance_query", "stdinLines": ["DEPOSIT 철수 900", "WITHDRAW 철수 200", "BALANCE 철수"], "expectedStdout": "철수 900\n철수 700\n철수 700" },
+          { "name": "account_history", "stdinLines": ["DEPOSIT 철수 1000", "WITHDRAW 철수 300", "HISTORY 철수"], "expectedStdout": "철수 1000\n철수 700\nDEPOSIT 1000 | WITHDRAW 300" }
+        ] },
+        { "stepOrder": 6, "testCases": [
+          { "name": "deposit_new_and_existing", "stdinLines": ["DEPOSIT 철수 1000", "DEPOSIT 철수 500"], "expectedStdout": "철수 1000\n철수 1500" },
+          { "name": "withdraw_and_insufficient", "stdinLines": ["DEPOSIT 철수 1000", "WITHDRAW 철수 300", "WITHDRAW 철수 800"], "expectedStdout": "철수 1000\n철수 700\nERROR: insufficient funds" },
+          { "name": "transfer_accounts", "stdinLines": ["DEPOSIT 철수 1000", "TRANSFER 철수 영희 250"], "expectedStdout": "철수 1000\n철수 750 -> 영희 250" },
+          { "name": "balance_query", "stdinLines": ["DEPOSIT 철수 900", "WITHDRAW 철수 200", "BALANCE 철수"], "expectedStdout": "철수 900\n철수 700\n철수 700" },
+          { "name": "account_history", "stdinLines": ["DEPOSIT 철수 1000", "WITHDRAW 철수 300", "HISTORY 철수"], "expectedStdout": "철수 1000\n철수 700\nDEPOSIT 1000 | WITHDRAW 300" },
+          { "name": "invalid_commands", "stdinLines": ["DEPOSIT 철수 -10", "BALANCE 영희", "UNKNOWN 철수 10"], "expectedStdout": "ERROR: invalid amount\nERROR: account not found\nERROR: unsupported command" }
+        ] }
+      ]
+    },
+    "projectStructureJson": {
+      "rootPath": "/workspace",
+      "entryFilePath": "main.py",
+      "files": [
+        { "filePath": "main.py", "language": "python", "readonly": false, "content": "def main():\n    accounts = {}\n    histories = {}\n\n    # EOF까지 명령을 한 줄씩 읽어 계좌 상태를 갱신하세요.\n    # 처리한 각 명령의 결과를 한 줄씩 출력하세요.\n    pass\n\n\nif __name__ == \"__main__\":\n    main()\n" },
+        { "filePath": "README.md", "language": "markdown", "readonly": true, "content": "# 은행 계좌 시스템\n\nEOF까지 한 줄에 하나의 명령이 주어집니다.\n\n- `DEPOSIT 이름 금액`\n- `WITHDRAW 이름 금액`\n- `TRANSFER 보내는이름 받는이름 금액`\n- `BALANCE 이름`\n- `HISTORY 이름`\n\n오류 문자열: `ERROR: invalid amount`, `ERROR: account not found`, `ERROR: insufficient funds`, `ERROR: unsupported command`\n" }
+      ]
+    }
   }
 ]
