@@ -13,7 +13,7 @@ import { MissionTemplateStepEntity } from '../entity/mission-template-step.entit
 import { MissionSeedService } from './mission-seed.service';
 
 describe('MissionSeedService', () => {
-  it('upserts calculator mission seed records deterministically', async () => {
+  it('upserts all mission seed records deterministically', async () => {
     const saved: unknown[] = [];
     const dockerImageRepository = createRepositoryMock<DockerImageEntity>();
     const missionTemplateRepository = createRepositoryMock<MissionTemplateEntity>();
@@ -54,8 +54,8 @@ describe('MissionSeedService', () => {
 
     expect(counts).toEqual({
       dockerImages: 1,
-      missionTemplates: 1,
-      missionTemplateSteps: 6,
+      missionTemplates: 3,
+      missionTemplateSteps: 18,
     });
     expect(dockerImageRepository.save).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -114,7 +114,45 @@ describe('MissionSeedService', () => {
         stepOrder: 1,
       }),
     );
-    expect(missionTemplateStepRepository.save).toHaveBeenCalledTimes(6);
+    expect(missionTemplateRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: '44444444-4444-4444-8444-444444444444',
+        title: '학생 성적 분석기',
+        difficulty: 'NORMAL',
+      }),
+    );
+    expect(missionTemplateRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: '55555555-5555-4555-8555-555555555555',
+        title: '은행 계좌 시스템',
+        difficulty: 'HARD',
+      }),
+    );
+    const savedTemplates = missionTemplateRepository.save.mock.calls.map(
+      ([template]) => template as MissionTemplateEntity,
+    );
+    const scoreAnalyzer = savedTemplates.find(
+      (template) => template.id === '44444444-4444-4444-8444-444444444444',
+    );
+    const bankingSystem = savedTemplates.find(
+      (template) => template.id === '55555555-5555-4555-8555-555555555555',
+    );
+
+    expect(scoreAnalyzer?.judgePolicyJson.steps).toHaveLength(6);
+    expect(bankingSystem?.judgePolicyJson.steps).toHaveLength(6);
+    expect(
+      (scoreAnalyzer?.judgePolicyJson.steps as Array<{
+        stepOrder: number;
+        testCases: Array<{ name: string }>;
+      }>)[5]?.testCases.map((testCase) => testCase.name),
+    ).toContain('sorted_scores');
+    expect(
+      (bankingSystem?.judgePolicyJson.steps as Array<{
+        stepOrder: number;
+        testCases: Array<{ name: string }>;
+      }>)[5]?.testCases.map((testCase) => testCase.name),
+    ).toContain('invalid_commands');
+    expect(missionTemplateStepRepository.save).toHaveBeenCalledTimes(18);
   });
 
   it('does not rewrite existing mission step primary keys on reseed', async () => {
