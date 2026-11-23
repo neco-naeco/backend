@@ -260,16 +260,21 @@ export class GameRoomsService {
             gameRoomMissionId: gameRoomMission.id,
           });
 
+        const itemsUnlockedAt = new Date();
         await manager.getRepository(GameRoomItemEntity).insert(
-          Object.values(GameItemType).map((itemType) => ({
-            gameRoomId: gameRoom.id,
-            itemType,
-            quantity: 0,
-            usedCount: 0,
-            activeCount: 0,
-            unlockReason: null,
-            unlockedAt: null,
-          })),
+          Object.values(GameItemType).map((itemType) => {
+            // The 30-second extension is available from the start of every game.
+            const unlockedAtStart = itemType === GameItemType.TIME_EXTENSION_30;
+            return {
+              gameRoomId: gameRoom.id,
+              itemType,
+              quantity: unlockedAtStart ? 1 : 0,
+              usedCount: 0,
+              activeCount: 0,
+              unlockReason: unlockedAtStart ? 'GAME_START' : null,
+              unlockedAt: unlockedAtStart ? itemsUnlockedAt : null,
+            };
+          }),
         );
 
         gameRoom.status = GameRoomStatus.IN_PROGRESS;
