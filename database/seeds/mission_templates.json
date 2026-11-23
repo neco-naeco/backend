@@ -243,52 +243,442 @@
     "judgePolicyJson": {
       "judgeType": "PUBLIC_TEST_CASES",
       "language": "python",
-      "runtime": { "entryFilePath": "main.py", "command": "python /workspace/main.py", "stdinMode": "lines", "promptFree": true },
-      "comparisonPolicy": { "stdout": "trim-exact", "stderr": "must-be-empty", "exitCode": 0 },
+      "runtime": {
+        "entryFilePath": "main.py",
+        "command": "python /workspace/main.py",
+        "stdinMode": "lines",
+        "promptFree": true
+      },
+      "comparisonPolicy": {
+        "stdout": "trim-exact",
+        "stderr": "must-be-empty",
+        "exitCode": 0
+      },
       "steps": [
-        { "stepOrder": 1, "testCases": [
-          { "name": "sum_scores", "stdinLines": ["SUM", "80 95 65 70"], "expectedStdout": "310" },
-          { "name": "sum_single_score", "stdinLines": ["SUM", "100"], "expectedStdout": "100" }
-        ] },
-        { "stepOrder": 2, "testCases": [
-          { "name": "sum_scores", "stdinLines": ["SUM", "80 95 65 70"], "expectedStdout": "310" },
-          { "name": "average_decimal", "stdinLines": ["AVERAGE", "80 95 65 70"], "expectedStdout": "77.5" },
-          { "name": "average_integer", "stdinLines": ["AVERAGE", "80 90"], "expectedStdout": "85" }
-        ] },
-        { "stepOrder": 3, "testCases": [
-          { "name": "sum_scores", "stdinLines": ["SUM", "80 95 65 70"], "expectedStdout": "310" },
-          { "name": "average_decimal", "stdinLines": ["AVERAGE", "80 95 65 70"], "expectedStdout": "77.5" },
-          { "name": "minmax_scores", "stdinLines": ["MINMAX", "80 95 65 70"], "expectedStdout": "65 95" }
-        ] },
-        { "stepOrder": 4, "testCases": [
-          { "name": "sum_scores", "stdinLines": ["SUM", "80 95 65 70"], "expectedStdout": "310" },
-          { "name": "average_decimal", "stdinLines": ["AVERAGE", "80 95 65 70"], "expectedStdout": "77.5" },
-          { "name": "minmax_scores", "stdinLines": ["MINMAX", "80 95 65 70"], "expectedStdout": "65 95" },
-          { "name": "letter_grades", "stdinLines": ["GRADES", "95 84 72 61 50"], "expectedStdout": "A B C D F" }
-        ] },
-        { "stepOrder": 5, "testCases": [
-          { "name": "sum_scores", "stdinLines": ["SUM", "80 95 65 70"], "expectedStdout": "310" },
-          { "name": "average_decimal", "stdinLines": ["AVERAGE", "80 95 65 70"], "expectedStdout": "77.5" },
-          { "name": "minmax_scores", "stdinLines": ["MINMAX", "80 95 65 70"], "expectedStdout": "65 95" },
-          { "name": "letter_grades", "stdinLines": ["GRADES", "95 84 72 61 50"], "expectedStdout": "A B C D F" },
-          { "name": "passed_scores", "stdinLines": ["PASSED", "55 80 59 60 100"], "expectedStdout": "80 60 100" }
-        ] },
-        { "stepOrder": 6, "testCases": [
-          { "name": "sum_scores", "stdinLines": ["SUM", "80 95 65 70"], "expectedStdout": "310" },
-          { "name": "average_decimal", "stdinLines": ["AVERAGE", "80 95 65 70"], "expectedStdout": "77.5" },
-          { "name": "minmax_scores", "stdinLines": ["MINMAX", "80 95 65 70"], "expectedStdout": "65 95" },
-          { "name": "letter_grades", "stdinLines": ["GRADES", "95 84 72 61 50"], "expectedStdout": "A B C D F" },
-          { "name": "passed_scores", "stdinLines": ["PASSED", "55 80 59 60 100"], "expectedStdout": "80 60 100" },
-          { "name": "sorted_scores", "stdinLines": ["SORTED", "70 95 65 80"], "expectedStdout": "95 80 70 65" }
-        ] }
+        {
+          "stepOrder": 1,
+          "testCases": [
+            {
+              "name": "sum_scores",
+              "stdinLines": [
+                "SUM",
+                "80 95 65 70"
+              ],
+              "expectedStdout": "310"
+            },
+            {
+              "name": "sum_single_score",
+              "stdinLines": [
+                "SUM",
+                "100"
+              ],
+              "expectedStdout": "100"
+            }
+          ]
+        },
+        {
+          "stepOrder": 2,
+          "testCases": [
+            {
+              "name": "sum_scores",
+              "stdinLines": [
+                "SUM",
+                "80 95 65 70"
+              ],
+              "expectedStdout": "310"
+            },
+            {
+              "name": "sum_single_score",
+              "stdinLines": [
+                "SUM",
+                "100"
+              ],
+              "expectedStdout": "100"
+            },
+            {
+              "name": "average_decimal",
+              "stdinLines": [
+                "AVERAGE",
+                "80 95 65 70"
+              ],
+              "expectedStdout": "77.5"
+            },
+            {
+              "name": "average_integer",
+              "stdinLines": [
+                "AVERAGE",
+                "80 90"
+              ],
+              "expectedStdout": "85"
+            },
+            {
+              "name": "average_rounded",
+              "stdinLines": [
+                "AVERAGE",
+                "70 80 85"
+              ],
+              "expectedStdout": "78.33"
+            }
+          ]
+        },
+        {
+          "stepOrder": 3,
+          "testCases": [
+            {
+              "name": "sum_scores",
+              "stdinLines": [
+                "SUM",
+                "80 95 65 70"
+              ],
+              "expectedStdout": "310"
+            },
+            {
+              "name": "sum_single_score",
+              "stdinLines": [
+                "SUM",
+                "100"
+              ],
+              "expectedStdout": "100"
+            },
+            {
+              "name": "average_decimal",
+              "stdinLines": [
+                "AVERAGE",
+                "80 95 65 70"
+              ],
+              "expectedStdout": "77.5"
+            },
+            {
+              "name": "average_integer",
+              "stdinLines": [
+                "AVERAGE",
+                "80 90"
+              ],
+              "expectedStdout": "85"
+            },
+            {
+              "name": "average_rounded",
+              "stdinLines": [
+                "AVERAGE",
+                "70 80 85"
+              ],
+              "expectedStdout": "78.33"
+            },
+            {
+              "name": "minmax_scores",
+              "stdinLines": [
+                "MINMAX",
+                "80 95 65 70"
+              ],
+              "expectedStdout": "65 95"
+            },
+            {
+              "name": "minmax_single_score",
+              "stdinLines": [
+                "MINMAX",
+                "100"
+              ],
+              "expectedStdout": "100 100"
+            }
+          ]
+        },
+        {
+          "stepOrder": 4,
+          "testCases": [
+            {
+              "name": "sum_scores",
+              "stdinLines": [
+                "SUM",
+                "80 95 65 70"
+              ],
+              "expectedStdout": "310"
+            },
+            {
+              "name": "sum_single_score",
+              "stdinLines": [
+                "SUM",
+                "100"
+              ],
+              "expectedStdout": "100"
+            },
+            {
+              "name": "average_decimal",
+              "stdinLines": [
+                "AVERAGE",
+                "80 95 65 70"
+              ],
+              "expectedStdout": "77.5"
+            },
+            {
+              "name": "average_integer",
+              "stdinLines": [
+                "AVERAGE",
+                "80 90"
+              ],
+              "expectedStdout": "85"
+            },
+            {
+              "name": "average_rounded",
+              "stdinLines": [
+                "AVERAGE",
+                "70 80 85"
+              ],
+              "expectedStdout": "78.33"
+            },
+            {
+              "name": "minmax_scores",
+              "stdinLines": [
+                "MINMAX",
+                "80 95 65 70"
+              ],
+              "expectedStdout": "65 95"
+            },
+            {
+              "name": "minmax_single_score",
+              "stdinLines": [
+                "MINMAX",
+                "100"
+              ],
+              "expectedStdout": "100 100"
+            },
+            {
+              "name": "letter_grades",
+              "stdinLines": [
+                "GRADES",
+                "95 84 72 61 50"
+              ],
+              "expectedStdout": "A B C D F"
+            },
+            {
+              "name": "grade_boundaries",
+              "stdinLines": [
+                "GRADES",
+                "90 80 70 60 59"
+              ],
+              "expectedStdout": "A B C D F"
+            }
+          ]
+        },
+        {
+          "stepOrder": 5,
+          "testCases": [
+            {
+              "name": "sum_scores",
+              "stdinLines": [
+                "SUM",
+                "80 95 65 70"
+              ],
+              "expectedStdout": "310"
+            },
+            {
+              "name": "sum_single_score",
+              "stdinLines": [
+                "SUM",
+                "100"
+              ],
+              "expectedStdout": "100"
+            },
+            {
+              "name": "average_decimal",
+              "stdinLines": [
+                "AVERAGE",
+                "80 95 65 70"
+              ],
+              "expectedStdout": "77.5"
+            },
+            {
+              "name": "average_integer",
+              "stdinLines": [
+                "AVERAGE",
+                "80 90"
+              ],
+              "expectedStdout": "85"
+            },
+            {
+              "name": "average_rounded",
+              "stdinLines": [
+                "AVERAGE",
+                "70 80 85"
+              ],
+              "expectedStdout": "78.33"
+            },
+            {
+              "name": "minmax_scores",
+              "stdinLines": [
+                "MINMAX",
+                "80 95 65 70"
+              ],
+              "expectedStdout": "65 95"
+            },
+            {
+              "name": "minmax_single_score",
+              "stdinLines": [
+                "MINMAX",
+                "100"
+              ],
+              "expectedStdout": "100 100"
+            },
+            {
+              "name": "letter_grades",
+              "stdinLines": [
+                "GRADES",
+                "95 84 72 61 50"
+              ],
+              "expectedStdout": "A B C D F"
+            },
+            {
+              "name": "grade_boundaries",
+              "stdinLines": [
+                "GRADES",
+                "90 80 70 60 59"
+              ],
+              "expectedStdout": "A B C D F"
+            },
+            {
+              "name": "passed_scores",
+              "stdinLines": [
+                "PASSED",
+                "55 80 59 60 100"
+              ],
+              "expectedStdout": "80 60 100"
+            },
+            {
+              "name": "passed_none",
+              "stdinLines": [
+                "PASSED",
+                "10 20"
+              ],
+              "expectedStdout": "NONE"
+            }
+          ]
+        },
+        {
+          "stepOrder": 6,
+          "testCases": [
+            {
+              "name": "sum_scores",
+              "stdinLines": [
+                "SUM",
+                "80 95 65 70"
+              ],
+              "expectedStdout": "310"
+            },
+            {
+              "name": "sum_single_score",
+              "stdinLines": [
+                "SUM",
+                "100"
+              ],
+              "expectedStdout": "100"
+            },
+            {
+              "name": "average_decimal",
+              "stdinLines": [
+                "AVERAGE",
+                "80 95 65 70"
+              ],
+              "expectedStdout": "77.5"
+            },
+            {
+              "name": "average_integer",
+              "stdinLines": [
+                "AVERAGE",
+                "80 90"
+              ],
+              "expectedStdout": "85"
+            },
+            {
+              "name": "average_rounded",
+              "stdinLines": [
+                "AVERAGE",
+                "70 80 85"
+              ],
+              "expectedStdout": "78.33"
+            },
+            {
+              "name": "minmax_scores",
+              "stdinLines": [
+                "MINMAX",
+                "80 95 65 70"
+              ],
+              "expectedStdout": "65 95"
+            },
+            {
+              "name": "minmax_single_score",
+              "stdinLines": [
+                "MINMAX",
+                "100"
+              ],
+              "expectedStdout": "100 100"
+            },
+            {
+              "name": "letter_grades",
+              "stdinLines": [
+                "GRADES",
+                "95 84 72 61 50"
+              ],
+              "expectedStdout": "A B C D F"
+            },
+            {
+              "name": "grade_boundaries",
+              "stdinLines": [
+                "GRADES",
+                "90 80 70 60 59"
+              ],
+              "expectedStdout": "A B C D F"
+            },
+            {
+              "name": "passed_scores",
+              "stdinLines": [
+                "PASSED",
+                "55 80 59 60 100"
+              ],
+              "expectedStdout": "80 60 100"
+            },
+            {
+              "name": "passed_none",
+              "stdinLines": [
+                "PASSED",
+                "10 20"
+              ],
+              "expectedStdout": "NONE"
+            },
+            {
+              "name": "sorted_scores",
+              "stdinLines": [
+                "SORTED",
+                "70 95 65 80"
+              ],
+              "expectedStdout": "95 80 70 65"
+            },
+            {
+              "name": "sorted_duplicates",
+              "stdinLines": [
+                "SORTED",
+                "70 95 70 65"
+              ],
+              "expectedStdout": "95 70 70 65"
+            }
+          ]
+        }
       ]
     },
     "projectStructureJson": {
       "rootPath": "/workspace",
       "entryFilePath": "main.py",
       "files": [
-        { "filePath": "main.py", "language": "python", "readonly": false, "content": "def main():\n    # 첫 줄의 분석 명령과 둘째 줄의 점수 목록을 읽으세요.\n    # 현재 단계에서 요구하는 명령의 결과만 한 줄로 출력하세요.\n    pass\n\n\nif __name__ == \"__main__\":\n    main()\n" },
-        { "filePath": "README.md", "language": "markdown", "readonly": true, "content": "# 학생 성적 분석기\n\n첫 줄에는 분석 명령, 둘째 줄에는 공백으로 구분한 정수 점수가 주어집니다.\n\n명령: `SUM`, `AVERAGE`, `MINMAX`, `GRADES`, `PASSED`, `SORTED`\n\n평균이 정수이면 `.0` 없이 출력하고, 합격 기준은 60점 이상입니다. 정렬은 내림차순입니다.\n" }
+        {
+          "filePath": "main.py",
+          "language": "python",
+          "readonly": false,
+          "content": "def main():\n    # 첫 줄의 분석 명령과 둘째 줄의 점수 목록을 읽으세요.\n    # 현재 단계에서 요구하는 명령의 결과만 한 줄로 출력하세요.\n    pass\n\n\nif __name__ == \"__main__\":\n    main()\n"
+        },
+        {
+          "filePath": "README.md",
+          "language": "markdown",
+          "readonly": true,
+          "content": "# 학생 성적 분석기\n\n첫 줄에는 분석 명령, 둘째 줄에는 공백으로 구분한 정수 점수가 주어집니다.\n\n명령: `SUM`, `AVERAGE`, `MINMAX`, `GRADES`, `PASSED`, `SORTED`\n\n- `AVERAGE`: 소수점 둘째 자리까지 반올림하고, 소수 끝의 불필요한 0과 `.0`은 출력하지 않습니다. (예: `85`, `77.5`, `78.33`)\n- `MINMAX`: `최솟값 최댓값` 형식으로 출력합니다.\n- `GRADES`: 90점 이상 A, 80점 이상 B, 70점 이상 C, 60점 이상 D, 그 미만은 F를 입력 순서대로 출력합니다.\n- `PASSED`: 60점 이상인 점수를 입력 순서대로 출력하고, 없으면 `NONE`을 출력합니다.\n- `SORTED`: 내림차순으로 정렬해 출력합니다.\n"
+        }
       ]
     }
   },
@@ -415,52 +805,644 @@
   {
     "id": "99999999-9999-4999-8999-999999999991",
     "title": "재고 관리기",
-    "description": "상품별 입고, 출고, 재고 조회 명령을 순서대로 처리합니다.",
+    "description": "상품별 입고, 출고, 재고 부족 오류, 재고 조회, 입력 오류 처리를 단계별로 구현합니다.",
     "language": "python",
     "difficulty": "NORMAL",
     "defaultTimeLimitSeconds": 300,
     "defaultMaxStrikeCount": 3,
     "dockerImageId": "11111111-1111-4111-8111-111111111111",
-    "successCriteria": "EOF까지 모든 명령을 처리하고 변경된 재고 또는 오류를 줄마다 출력합니다.",
+    "successCriteria": "다섯 단계의 공개 테스트 케이스를 모두 통과하고, EOF까지 각 명령의 결과 또는 지정된 오류 문자열을 한 줄씩 출력합니다.",
     "judgePolicyJson": {
-      "judgeType": "PUBLIC_TEST_CASES", "language": "python",
-      "runtime": { "entryFilePath": "main.py", "command": "python /workspace/main.py", "stdinMode": "lines", "promptFree": true },
-      "comparisonPolicy": { "stdout": "trim-exact", "stderr": "must-be-empty", "exitCode": 0 },
+      "judgeType": "PUBLIC_TEST_CASES",
+      "language": "python",
+      "runtime": {
+        "entryFilePath": "main.py",
+        "command": "python /workspace/main.py",
+        "stdinMode": "lines",
+        "promptFree": true
+      },
+      "comparisonPolicy": {
+        "stdout": "trim-exact",
+        "stderr": "must-be-empty",
+        "exitCode": 0
+      },
       "steps": [
-        { "stepOrder": 1, "testCases": [{ "name": "add_stock", "stdinLines": ["ADD apple 5", "ADD apple 3"], "expectedStdout": "apple 5\napple 8" }] },
-        { "stepOrder": 2, "testCases": [{ "name": "remove_stock", "stdinLines": ["ADD apple 5", "REMOVE apple 2"], "expectedStdout": "apple 5\napple 3" }] },
-        { "stepOrder": 3, "testCases": [{ "name": "stock_query", "stdinLines": ["ADD apple 5", "REMOVE apple 2", "STOCK apple"], "expectedStdout": "apple 5\napple 3\napple 3" }, { "name": "insufficient_stock", "stdinLines": ["ADD apple 2", "REMOVE apple 5"], "expectedStdout": "apple 2\nERROR: insufficient stock" }] }
+        {
+          "stepOrder": 1,
+          "testCases": [
+            {
+              "name": "add_stock",
+              "stdinLines": [
+                "ADD apple 5",
+                "ADD apple 3"
+              ],
+              "expectedStdout": "apple 5\napple 8"
+            },
+            {
+              "name": "add_multiple_products",
+              "stdinLines": [
+                "ADD apple 5",
+                "ADD banana 3",
+                "ADD apple 1"
+              ],
+              "expectedStdout": "apple 5\nbanana 3\napple 6"
+            }
+          ]
+        },
+        {
+          "stepOrder": 2,
+          "testCases": [
+            {
+              "name": "add_stock",
+              "stdinLines": [
+                "ADD apple 5",
+                "ADD apple 3"
+              ],
+              "expectedStdout": "apple 5\napple 8"
+            },
+            {
+              "name": "add_multiple_products",
+              "stdinLines": [
+                "ADD apple 5",
+                "ADD banana 3",
+                "ADD apple 1"
+              ],
+              "expectedStdout": "apple 5\nbanana 3\napple 6"
+            },
+            {
+              "name": "remove_stock",
+              "stdinLines": [
+                "ADD apple 5",
+                "REMOVE apple 2"
+              ],
+              "expectedStdout": "apple 5\napple 3"
+            },
+            {
+              "name": "remove_to_zero",
+              "stdinLines": [
+                "ADD apple 5",
+                "REMOVE apple 5"
+              ],
+              "expectedStdout": "apple 5\napple 0"
+            }
+          ]
+        },
+        {
+          "stepOrder": 3,
+          "testCases": [
+            {
+              "name": "add_stock",
+              "stdinLines": [
+                "ADD apple 5",
+                "ADD apple 3"
+              ],
+              "expectedStdout": "apple 5\napple 8"
+            },
+            {
+              "name": "add_multiple_products",
+              "stdinLines": [
+                "ADD apple 5",
+                "ADD banana 3",
+                "ADD apple 1"
+              ],
+              "expectedStdout": "apple 5\nbanana 3\napple 6"
+            },
+            {
+              "name": "remove_stock",
+              "stdinLines": [
+                "ADD apple 5",
+                "REMOVE apple 2"
+              ],
+              "expectedStdout": "apple 5\napple 3"
+            },
+            {
+              "name": "remove_to_zero",
+              "stdinLines": [
+                "ADD apple 5",
+                "REMOVE apple 5"
+              ],
+              "expectedStdout": "apple 5\napple 0"
+            },
+            {
+              "name": "insufficient_stock",
+              "stdinLines": [
+                "ADD apple 2",
+                "REMOVE apple 5"
+              ],
+              "expectedStdout": "apple 2\nERROR: insufficient stock"
+            },
+            {
+              "name": "stock_unchanged_after_error",
+              "stdinLines": [
+                "ADD apple 2",
+                "REMOVE apple 5",
+                "REMOVE apple 2"
+              ],
+              "expectedStdout": "apple 2\nERROR: insufficient stock\napple 0"
+            }
+          ]
+        },
+        {
+          "stepOrder": 4,
+          "testCases": [
+            {
+              "name": "add_stock",
+              "stdinLines": [
+                "ADD apple 5",
+                "ADD apple 3"
+              ],
+              "expectedStdout": "apple 5\napple 8"
+            },
+            {
+              "name": "add_multiple_products",
+              "stdinLines": [
+                "ADD apple 5",
+                "ADD banana 3",
+                "ADD apple 1"
+              ],
+              "expectedStdout": "apple 5\nbanana 3\napple 6"
+            },
+            {
+              "name": "remove_stock",
+              "stdinLines": [
+                "ADD apple 5",
+                "REMOVE apple 2"
+              ],
+              "expectedStdout": "apple 5\napple 3"
+            },
+            {
+              "name": "remove_to_zero",
+              "stdinLines": [
+                "ADD apple 5",
+                "REMOVE apple 5"
+              ],
+              "expectedStdout": "apple 5\napple 0"
+            },
+            {
+              "name": "insufficient_stock",
+              "stdinLines": [
+                "ADD apple 2",
+                "REMOVE apple 5"
+              ],
+              "expectedStdout": "apple 2\nERROR: insufficient stock"
+            },
+            {
+              "name": "stock_unchanged_after_error",
+              "stdinLines": [
+                "ADD apple 2",
+                "REMOVE apple 5",
+                "REMOVE apple 2"
+              ],
+              "expectedStdout": "apple 2\nERROR: insufficient stock\napple 0"
+            },
+            {
+              "name": "stock_query",
+              "stdinLines": [
+                "ADD apple 5",
+                "REMOVE apple 2",
+                "STOCK apple"
+              ],
+              "expectedStdout": "apple 5\napple 3\napple 3"
+            },
+            {
+              "name": "stock_multiple_products",
+              "stdinLines": [
+                "ADD apple 5",
+                "ADD banana 3",
+                "STOCK banana",
+                "STOCK apple"
+              ],
+              "expectedStdout": "apple 5\nbanana 3\nbanana 3\napple 5"
+            }
+          ]
+        },
+        {
+          "stepOrder": 5,
+          "testCases": [
+            {
+              "name": "add_stock",
+              "stdinLines": [
+                "ADD apple 5",
+                "ADD apple 3"
+              ],
+              "expectedStdout": "apple 5\napple 8"
+            },
+            {
+              "name": "add_multiple_products",
+              "stdinLines": [
+                "ADD apple 5",
+                "ADD banana 3",
+                "ADD apple 1"
+              ],
+              "expectedStdout": "apple 5\nbanana 3\napple 6"
+            },
+            {
+              "name": "remove_stock",
+              "stdinLines": [
+                "ADD apple 5",
+                "REMOVE apple 2"
+              ],
+              "expectedStdout": "apple 5\napple 3"
+            },
+            {
+              "name": "remove_to_zero",
+              "stdinLines": [
+                "ADD apple 5",
+                "REMOVE apple 5"
+              ],
+              "expectedStdout": "apple 5\napple 0"
+            },
+            {
+              "name": "insufficient_stock",
+              "stdinLines": [
+                "ADD apple 2",
+                "REMOVE apple 5"
+              ],
+              "expectedStdout": "apple 2\nERROR: insufficient stock"
+            },
+            {
+              "name": "stock_unchanged_after_error",
+              "stdinLines": [
+                "ADD apple 2",
+                "REMOVE apple 5",
+                "REMOVE apple 2"
+              ],
+              "expectedStdout": "apple 2\nERROR: insufficient stock\napple 0"
+            },
+            {
+              "name": "stock_query",
+              "stdinLines": [
+                "ADD apple 5",
+                "REMOVE apple 2",
+                "STOCK apple"
+              ],
+              "expectedStdout": "apple 5\napple 3\napple 3"
+            },
+            {
+              "name": "stock_multiple_products",
+              "stdinLines": [
+                "ADD apple 5",
+                "ADD banana 3",
+                "STOCK banana",
+                "STOCK apple"
+              ],
+              "expectedStdout": "apple 5\nbanana 3\nbanana 3\napple 5"
+            },
+            {
+              "name": "remove_unknown_product",
+              "stdinLines": [
+                "REMOVE pear 1"
+              ],
+              "expectedStdout": "ERROR: product not found"
+            },
+            {
+              "name": "stock_unknown_product",
+              "stdinLines": [
+                "STOCK pear"
+              ],
+              "expectedStdout": "ERROR: product not found"
+            },
+            {
+              "name": "invalid_quantity",
+              "stdinLines": [
+                "ADD apple 0",
+                "ADD apple abc",
+                "ADD apple -3"
+              ],
+              "expectedStdout": "ERROR: invalid quantity\nERROR: invalid quantity\nERROR: invalid quantity"
+            },
+            {
+              "name": "unsupported_command",
+              "stdinLines": [
+                "SELL apple 1"
+              ],
+              "expectedStdout": "ERROR: unsupported command"
+            }
+          ]
+        }
       ]
     },
-    "projectStructureJson": { "rootPath": "/workspace", "entryFilePath": "main.py", "files": [
-      { "filePath": "main.py", "language": "python", "readonly": false, "content": "import sys\n\n\ndef main():\n    stocks = {}\n    # EOF까지 ADD, REMOVE, STOCK 명령을 처리하세요.\n    pass\n\n\nif __name__ == \"__main__\":\n    main()\n" },
-      { "filePath": "README.md", "language": "markdown", "readonly": true, "content": "# 재고 관리기\n\n`ADD 상품 수량`, `REMOVE 상품 수량`, `STOCK 상품` 명령을 EOF까지 처리합니다.\n" }
-    ] }
+    "projectStructureJson": {
+      "rootPath": "/workspace",
+      "entryFilePath": "main.py",
+      "files": [
+        {
+          "filePath": "main.py",
+          "language": "python",
+          "readonly": false,
+          "content": "import sys\n\n\ndef main():\n    stocks = {}\n    # EOF까지 ADD, REMOVE, STOCK 명령을 처리하세요.\n    pass\n\n\nif __name__ == \"__main__\":\n    main()\n"
+        },
+        {
+          "filePath": "README.md",
+          "language": "markdown",
+          "readonly": true,
+          "content": "# 재고 관리기\n\nEOF까지 한 줄에 하나의 명령이 주어집니다.\n\n- `ADD 상품 수량`: 재고를 늘리고 `상품 현재재고`를 출력합니다.\n- `REMOVE 상품 수량`: 재고를 줄이고 `상품 남은재고`를 출력합니다.\n- `STOCK 상품`: `상품 현재재고`를 출력합니다.\n\n수량은 1 이상의 정수입니다. 재고 부족 오류가 나면 재고는 바뀌지 않습니다.\n검사 순서는 명령, 수량, 상품 순서입니다.\n\n오류 문자열: `ERROR: insufficient stock`, `ERROR: product not found`, `ERROR: invalid quantity`, `ERROR: unsupported command`\n"
+        }
+      ]
+    }
   },
   {
     "id": "99999999-9999-4999-8999-999999999992",
     "title": "로그 통계 분석기",
-    "description": "로그 레벨별 개수와 가장 많이 발생한 레벨을 분석합니다.",
+    "description": "로그 레벨별 개수, 전체 개수, 가장 많이 발생한 레벨, 빈 입력과 오류 처리를 단계별로 구현합니다.",
     "language": "python",
     "difficulty": "NORMAL",
     "defaultTimeLimitSeconds": 300,
     "defaultMaxStrikeCount": 3,
     "dockerImageId": "11111111-1111-4111-8111-111111111111",
-    "successCriteria": "COUNT, TOTAL, MOST 명령에 맞는 로그 통계를 정확히 출력합니다.",
+    "successCriteria": "네 단계의 공개 테스트 케이스를 모두 통과하고, 명령별 통계 또는 지정된 오류 문자열을 정확히 한 줄로 출력합니다.",
     "judgePolicyJson": {
-      "judgeType": "PUBLIC_TEST_CASES", "language": "python",
-      "runtime": { "entryFilePath": "main.py", "command": "python /workspace/main.py", "stdinMode": "lines", "promptFree": true },
-      "comparisonPolicy": { "stdout": "trim-exact", "stderr": "must-be-empty", "exitCode": 0 },
+      "judgeType": "PUBLIC_TEST_CASES",
+      "language": "python",
+      "runtime": {
+        "entryFilePath": "main.py",
+        "command": "python /workspace/main.py",
+        "stdinMode": "lines",
+        "promptFree": true
+      },
+      "comparisonPolicy": {
+        "stdout": "trim-exact",
+        "stderr": "must-be-empty",
+        "exitCode": 0
+      },
       "steps": [
-        { "stepOrder": 1, "testCases": [{ "name": "count_level", "stdinLines": ["COUNT ERROR", "INFO", "ERROR", "ERROR", "WARN"], "expectedStdout": "2" }] },
-        { "stepOrder": 2, "testCases": [{ "name": "total_logs", "stdinLines": ["TOTAL", "INFO", "ERROR", "WARN"], "expectedStdout": "3" }] },
-        { "stepOrder": 3, "testCases": [{ "name": "most_level", "stdinLines": ["MOST", "INFO", "ERROR", "ERROR", "WARN"], "expectedStdout": "ERROR 2" }, { "name": "count_level", "stdinLines": ["COUNT WARN", "WARN", "INFO", "WARN"], "expectedStdout": "2" }] }
+        {
+          "stepOrder": 1,
+          "testCases": [
+            {
+              "name": "count_level",
+              "stdinLines": [
+                "COUNT ERROR",
+                "INFO",
+                "ERROR",
+                "ERROR",
+                "WARN"
+              ],
+              "expectedStdout": "2"
+            },
+            {
+              "name": "count_absent_level",
+              "stdinLines": [
+                "COUNT DEBUG",
+                "INFO",
+                "WARN"
+              ],
+              "expectedStdout": "0"
+            }
+          ]
+        },
+        {
+          "stepOrder": 2,
+          "testCases": [
+            {
+              "name": "count_level",
+              "stdinLines": [
+                "COUNT ERROR",
+                "INFO",
+                "ERROR",
+                "ERROR",
+                "WARN"
+              ],
+              "expectedStdout": "2"
+            },
+            {
+              "name": "count_absent_level",
+              "stdinLines": [
+                "COUNT DEBUG",
+                "INFO",
+                "WARN"
+              ],
+              "expectedStdout": "0"
+            },
+            {
+              "name": "total_logs",
+              "stdinLines": [
+                "TOTAL",
+                "INFO",
+                "ERROR",
+                "WARN"
+              ],
+              "expectedStdout": "3"
+            },
+            {
+              "name": "total_skips_blank_lines",
+              "stdinLines": [
+                "TOTAL",
+                "INFO",
+                "",
+                "ERROR"
+              ],
+              "expectedStdout": "2"
+            }
+          ]
+        },
+        {
+          "stepOrder": 3,
+          "testCases": [
+            {
+              "name": "count_level",
+              "stdinLines": [
+                "COUNT ERROR",
+                "INFO",
+                "ERROR",
+                "ERROR",
+                "WARN"
+              ],
+              "expectedStdout": "2"
+            },
+            {
+              "name": "count_absent_level",
+              "stdinLines": [
+                "COUNT DEBUG",
+                "INFO",
+                "WARN"
+              ],
+              "expectedStdout": "0"
+            },
+            {
+              "name": "total_logs",
+              "stdinLines": [
+                "TOTAL",
+                "INFO",
+                "ERROR",
+                "WARN"
+              ],
+              "expectedStdout": "3"
+            },
+            {
+              "name": "total_skips_blank_lines",
+              "stdinLines": [
+                "TOTAL",
+                "INFO",
+                "",
+                "ERROR"
+              ],
+              "expectedStdout": "2"
+            },
+            {
+              "name": "most_level",
+              "stdinLines": [
+                "MOST",
+                "INFO",
+                "ERROR",
+                "ERROR",
+                "WARN"
+              ],
+              "expectedStdout": "ERROR 2"
+            },
+            {
+              "name": "most_tie_first_seen",
+              "stdinLines": [
+                "MOST",
+                "WARN",
+                "INFO",
+                "INFO",
+                "WARN"
+              ],
+              "expectedStdout": "WARN 2"
+            },
+            {
+              "name": "most_single_level",
+              "stdinLines": [
+                "MOST",
+                "INFO"
+              ],
+              "expectedStdout": "INFO 1"
+            }
+          ]
+        },
+        {
+          "stepOrder": 4,
+          "testCases": [
+            {
+              "name": "count_level",
+              "stdinLines": [
+                "COUNT ERROR",
+                "INFO",
+                "ERROR",
+                "ERROR",
+                "WARN"
+              ],
+              "expectedStdout": "2"
+            },
+            {
+              "name": "count_absent_level",
+              "stdinLines": [
+                "COUNT DEBUG",
+                "INFO",
+                "WARN"
+              ],
+              "expectedStdout": "0"
+            },
+            {
+              "name": "total_logs",
+              "stdinLines": [
+                "TOTAL",
+                "INFO",
+                "ERROR",
+                "WARN"
+              ],
+              "expectedStdout": "3"
+            },
+            {
+              "name": "total_skips_blank_lines",
+              "stdinLines": [
+                "TOTAL",
+                "INFO",
+                "",
+                "ERROR"
+              ],
+              "expectedStdout": "2"
+            },
+            {
+              "name": "most_level",
+              "stdinLines": [
+                "MOST",
+                "INFO",
+                "ERROR",
+                "ERROR",
+                "WARN"
+              ],
+              "expectedStdout": "ERROR 2"
+            },
+            {
+              "name": "most_tie_first_seen",
+              "stdinLines": [
+                "MOST",
+                "WARN",
+                "INFO",
+                "INFO",
+                "WARN"
+              ],
+              "expectedStdout": "WARN 2"
+            },
+            {
+              "name": "most_single_level",
+              "stdinLines": [
+                "MOST",
+                "INFO"
+              ],
+              "expectedStdout": "INFO 1"
+            },
+            {
+              "name": "empty_total",
+              "stdinLines": [
+                "TOTAL"
+              ],
+              "expectedStdout": "0"
+            },
+            {
+              "name": "empty_count",
+              "stdinLines": [
+                "COUNT ERROR"
+              ],
+              "expectedStdout": "0"
+            },
+            {
+              "name": "empty_most",
+              "stdinLines": [
+                "MOST"
+              ],
+              "expectedStdout": "NONE"
+            },
+            {
+              "name": "unsupported_command",
+              "stdinLines": [
+                "AVERAGE",
+                "INFO"
+              ],
+              "expectedStdout": "ERROR: unsupported command"
+            },
+            {
+              "name": "count_missing_level",
+              "stdinLines": [
+                "COUNT",
+                "INFO"
+              ],
+              "expectedStdout": "ERROR: missing level"
+            }
+          ]
+        }
       ]
     },
-    "projectStructureJson": { "rootPath": "/workspace", "entryFilePath": "main.py", "files": [
-      { "filePath": "main.py", "language": "python", "readonly": false, "content": "import sys\n\n\ndef main():\n    command = input().strip()\n    logs = [line.strip() for line in sys.stdin if line.strip()]\n    # command에 맞는 로그 통계를 출력하세요.\n    pass\n\n\nif __name__ == \"__main__\":\n    main()\n" },
-      { "filePath": "README.md", "language": "markdown", "readonly": true, "content": "# 로그 통계 분석기\n\n첫 줄의 `COUNT 레벨`, `TOTAL`, `MOST` 명령에 따라 나머지 로그 레벨을 분석합니다.\n" }
-    ] }
+    "projectStructureJson": {
+      "rootPath": "/workspace",
+      "entryFilePath": "main.py",
+      "files": [
+        {
+          "filePath": "main.py",
+          "language": "python",
+          "readonly": false,
+          "content": "import sys\n\n\ndef main():\n    command = input().strip()\n    logs = [line.strip() for line in sys.stdin if line.strip()]\n    # command에 맞는 로그 통계를 출력하세요.\n    pass\n\n\nif __name__ == \"__main__\":\n    main()\n"
+        },
+        {
+          "filePath": "README.md",
+          "language": "markdown",
+          "readonly": true,
+          "content": "# 로그 통계 분석기\n\n첫 줄은 명령이고, 둘째 줄부터는 한 줄에 로그 레벨 하나가 주어집니다. 빈 줄은 무시합니다.\n\n- `COUNT 레벨`: 해당 레벨의 로그 개수를 출력합니다. 없으면 `0`입니다.\n- `TOTAL`: 전체 로그 개수를 출력합니다.\n- `MOST`: 가장 많이 나온 레벨과 개수를 `레벨 개수` 형식으로 출력합니다. 개수가 같으면 먼저 등장한 레벨입니다.\n\n로그가 없으면 `TOTAL`과 `COUNT`는 `0`, `MOST`는 `NONE`을 출력합니다.\n오류 문자열: `ERROR: unsupported command`, `ERROR: missing level`\n"
+        }
+      ]
+    }
   },
   {
     "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1",
@@ -511,5 +1493,688 @@
       { "filePath": "main.py", "language": "python", "readonly": false, "content": "import sys\n\n\ndef main():\n    seats = {}\n    # EOF까지 RESERVE, CANCEL, STATUS 명령을 처리하세요.\n    pass\n\n\nif __name__ == \"__main__\":\n    main()\n" },
       { "filePath": "README.md", "language": "markdown", "readonly": true, "content": "# 좌석 예약 시스템\n\n`RESERVE 좌석 이름`, `CANCEL 좌석`, `STATUS 좌석` 명령을 EOF까지 처리합니다.\n" }
     ] }
+  },
+  {
+    "id": "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee1",
+    "title": "소수 판별기",
+    "description": "정수를 입력받아 소수 판별, 소수 개수, 소수 목록, 소인수분해와 오류 처리를 단계별로 구현합니다.",
+    "language": "python",
+    "difficulty": "NORMAL",
+    "defaultTimeLimitSeconds": 300,
+    "defaultMaxStrikeCount": 3,
+    "dockerImageId": "11111111-1111-4111-8111-111111111111",
+    "successCriteria": "다섯 단계의 공개 테스트 케이스를 모두 통과하고, 명령별 결과 또는 지정된 오류 문자열을 정확히 한 줄로 출력합니다.",
+    "judgePolicyJson": {
+      "judgeType": "PUBLIC_TEST_CASES",
+      "language": "python",
+      "runtime": {
+        "entryFilePath": "main.py",
+        "command": "python /workspace/main.py",
+        "stdinMode": "lines",
+        "promptFree": true
+      },
+      "comparisonPolicy": {
+        "stdout": "trim-exact",
+        "stderr": "must-be-empty",
+        "exitCode": 0
+      },
+      "errorStrings": {
+        "invalidNumber": "ERROR: invalid number",
+        "unsupportedCommand": "ERROR: unsupported command"
+      },
+      "steps": [
+        {
+          "stepOrder": 1,
+          "testCases": [
+            {
+              "name": "prime_seven",
+              "stdinLines": [
+                "PRIME",
+                "7"
+              ],
+              "expectedStdout": "PRIME"
+            },
+            {
+              "name": "composite_nine",
+              "stdinLines": [
+                "PRIME",
+                "9"
+              ],
+              "expectedStdout": "NOT PRIME"
+            },
+            {
+              "name": "one_is_not_prime",
+              "stdinLines": [
+                "PRIME",
+                "1"
+              ],
+              "expectedStdout": "NOT PRIME"
+            },
+            {
+              "name": "two_is_prime",
+              "stdinLines": [
+                "PRIME",
+                "2"
+              ],
+              "expectedStdout": "PRIME"
+            }
+          ]
+        },
+        {
+          "stepOrder": 2,
+          "testCases": [
+            {
+              "name": "prime_seven",
+              "stdinLines": [
+                "PRIME",
+                "7"
+              ],
+              "expectedStdout": "PRIME"
+            },
+            {
+              "name": "composite_nine",
+              "stdinLines": [
+                "PRIME",
+                "9"
+              ],
+              "expectedStdout": "NOT PRIME"
+            },
+            {
+              "name": "one_is_not_prime",
+              "stdinLines": [
+                "PRIME",
+                "1"
+              ],
+              "expectedStdout": "NOT PRIME"
+            },
+            {
+              "name": "count_to_ten",
+              "stdinLines": [
+                "COUNT",
+                "10"
+              ],
+              "expectedStdout": "4"
+            },
+            {
+              "name": "count_to_one",
+              "stdinLines": [
+                "COUNT",
+                "1"
+              ],
+              "expectedStdout": "0"
+            },
+            {
+              "name": "count_to_two",
+              "stdinLines": [
+                "COUNT",
+                "2"
+              ],
+              "expectedStdout": "1"
+            },
+            {
+              "name": "count_to_hundred",
+              "stdinLines": [
+                "COUNT",
+                "100"
+              ],
+              "expectedStdout": "25"
+            }
+          ]
+        },
+        {
+          "stepOrder": 3,
+          "testCases": [
+            {
+              "name": "prime_seven",
+              "stdinLines": [
+                "PRIME",
+                "7"
+              ],
+              "expectedStdout": "PRIME"
+            },
+            {
+              "name": "one_is_not_prime",
+              "stdinLines": [
+                "PRIME",
+                "1"
+              ],
+              "expectedStdout": "NOT PRIME"
+            },
+            {
+              "name": "count_to_ten",
+              "stdinLines": [
+                "COUNT",
+                "10"
+              ],
+              "expectedStdout": "4"
+            },
+            {
+              "name": "list_to_twenty",
+              "stdinLines": [
+                "LIST",
+                "20"
+              ],
+              "expectedStdout": "2 3 5 7 11 13 17 19"
+            },
+            {
+              "name": "list_to_two",
+              "stdinLines": [
+                "LIST",
+                "2"
+              ],
+              "expectedStdout": "2"
+            },
+            {
+              "name": "list_none",
+              "stdinLines": [
+                "LIST",
+                "1"
+              ],
+              "expectedStdout": "NONE"
+            }
+          ]
+        },
+        {
+          "stepOrder": 4,
+          "testCases": [
+            {
+              "name": "prime_seven",
+              "stdinLines": [
+                "PRIME",
+                "7"
+              ],
+              "expectedStdout": "PRIME"
+            },
+            {
+              "name": "count_to_ten",
+              "stdinLines": [
+                "COUNT",
+                "10"
+              ],
+              "expectedStdout": "4"
+            },
+            {
+              "name": "list_to_twenty",
+              "stdinLines": [
+                "LIST",
+                "20"
+              ],
+              "expectedStdout": "2 3 5 7 11 13 17 19"
+            },
+            {
+              "name": "factor_twelve",
+              "stdinLines": [
+                "FACTOR",
+                "12"
+              ],
+              "expectedStdout": "2 2 3"
+            },
+            {
+              "name": "factor_prime",
+              "stdinLines": [
+                "FACTOR",
+                "97"
+              ],
+              "expectedStdout": "97"
+            },
+            {
+              "name": "factor_composite_large",
+              "stdinLines": [
+                "FACTOR",
+                "360"
+              ],
+              "expectedStdout": "2 2 2 3 3 5"
+            },
+            {
+              "name": "factor_prime_power",
+              "stdinLines": [
+                "FACTOR",
+                "49"
+              ],
+              "expectedStdout": "7 7"
+            }
+          ]
+        },
+        {
+          "stepOrder": 5,
+          "testCases": [
+            {
+              "name": "prime_seven",
+              "stdinLines": [
+                "PRIME",
+                "7"
+              ],
+              "expectedStdout": "PRIME"
+            },
+            {
+              "name": "count_to_ten",
+              "stdinLines": [
+                "COUNT",
+                "10"
+              ],
+              "expectedStdout": "4"
+            },
+            {
+              "name": "list_to_twenty",
+              "stdinLines": [
+                "LIST",
+                "20"
+              ],
+              "expectedStdout": "2 3 5 7 11 13 17 19"
+            },
+            {
+              "name": "factor_twelve",
+              "stdinLines": [
+                "FACTOR",
+                "12"
+              ],
+              "expectedStdout": "2 2 3"
+            },
+            {
+              "name": "invalid_number_text",
+              "stdinLines": [
+                "PRIME",
+                "abc"
+              ],
+              "expectedStdout": "ERROR: invalid number"
+            },
+            {
+              "name": "invalid_number_decimal",
+              "stdinLines": [
+                "COUNT",
+                "3.5"
+              ],
+              "expectedStdout": "ERROR: invalid number"
+            },
+            {
+              "name": "factor_below_two",
+              "stdinLines": [
+                "FACTOR",
+                "1"
+              ],
+              "expectedStdout": "ERROR: invalid number"
+            },
+            {
+              "name": "negative_not_prime",
+              "stdinLines": [
+                "PRIME",
+                "-7"
+              ],
+              "expectedStdout": "NOT PRIME"
+            },
+            {
+              "name": "unsupported_command",
+              "stdinLines": [
+                "SQRT",
+                "16"
+              ],
+              "expectedStdout": "ERROR: unsupported command"
+            }
+          ]
+        }
+      ]
+    },
+    "projectStructureJson": {
+      "rootPath": "/workspace",
+      "entryFilePath": "main.py",
+      "files": [
+        {
+          "filePath": "main.py",
+          "language": "python",
+          "readonly": false,
+          "content": "def main():\n    command = input().strip()\n    number = input().strip()\n\n    # command에 따라 결과를 한 줄로 출력하세요.\n    pass\n\n\nif __name__ == \"__main__\":\n    main()\n"
+        },
+        {
+          "filePath": "README.md",
+          "language": "markdown",
+          "readonly": true,
+          "content": "# 소수 판별기\n\n표준 입력은 두 줄입니다.\n\n1. 명령: `PRIME`, `COUNT`, `LIST`, `FACTOR`\n2. 정수 n\n\n- `PRIME`: n이 소수이면 `PRIME`, 아니면 `NOT PRIME` (1과 음수는 소수가 아닙니다)\n- `COUNT`: n 이하 소수의 개수\n- `LIST`: n 이하 소수를 오름차순으로 공백 구분 출력, 없으면 `NONE`\n- `FACTOR`: n의 소인수를 오름차순으로 공백 구분 출력 (n은 2 이상)\n\n오류 문자열: `ERROR: invalid number`, `ERROR: unsupported command`. 명령을 먼저 검사합니다.\n"
+        }
+      ]
+    }
+  },
+  {
+    "id": "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee2",
+    "title": "괄호 검사기",
+    "description": "문자열의 괄호가 올바르게 짝지어졌는지 스택으로 검사하고, 어긋난 위치와 괄호 외 문자 처리까지 단계별로 구현합니다.",
+    "language": "python",
+    "difficulty": "HARD",
+    "defaultTimeLimitSeconds": 300,
+    "defaultMaxStrikeCount": 3,
+    "dockerImageId": "11111111-1111-4111-8111-111111111111",
+    "successCriteria": "다섯 단계의 공개 테스트 케이스를 모두 통과하고, 판정 결과를 정확히 한 줄로 출력합니다.",
+    "judgePolicyJson": {
+      "judgeType": "PUBLIC_TEST_CASES",
+      "language": "python",
+      "runtime": {
+        "entryFilePath": "main.py",
+        "command": "python /workspace/main.py",
+        "stdinMode": "lines",
+        "promptFree": true
+      },
+      "comparisonPolicy": {
+        "stdout": "trim-exact",
+        "stderr": "must-be-empty",
+        "exitCode": 0
+      },
+      "steps": [
+        {
+          "stepOrder": 1,
+          "testCases": [
+            {
+              "name": "paren_simple",
+              "stdinLines": [
+                "()"
+              ],
+              "expectedStdout": "OK"
+            },
+            {
+              "name": "paren_nested",
+              "stdinLines": [
+                "(())"
+              ],
+              "expectedStdout": "OK"
+            },
+            {
+              "name": "paren_open_left",
+              "stdinLines": [
+                "(()"
+              ],
+              "expectedStdout": "NO"
+            },
+            {
+              "name": "paren_extra_close",
+              "stdinLines": [
+                "())"
+              ],
+              "expectedStdout": "NO"
+            },
+            {
+              "name": "paren_wrong_order",
+              "stdinLines": [
+                ")("
+              ],
+              "expectedStdout": "NO"
+            }
+          ]
+        },
+        {
+          "stepOrder": 2,
+          "testCases": [
+            {
+              "name": "paren_simple",
+              "stdinLines": [
+                "()"
+              ],
+              "expectedStdout": "OK"
+            },
+            {
+              "name": "paren_open_left",
+              "stdinLines": [
+                "(()"
+              ],
+              "expectedStdout": "NO"
+            },
+            {
+              "name": "kinds_sequence",
+              "stdinLines": [
+                "()[]{}"
+              ],
+              "expectedStdout": "OK"
+            },
+            {
+              "name": "kinds_nested",
+              "stdinLines": [
+                "{[()]}"
+              ],
+              "expectedStdout": "OK"
+            },
+            {
+              "name": "type_mismatch",
+              "stdinLines": [
+                "(]"
+              ],
+              "expectedStdout": "NO"
+            },
+            {
+              "name": "curly_unclosed",
+              "stdinLines": [
+                "{"
+              ],
+              "expectedStdout": "NO"
+            },
+            {
+              "name": "square_extra_close",
+              "stdinLines": [
+                "]"
+              ],
+              "expectedStdout": "NO"
+            }
+          ]
+        },
+        {
+          "stepOrder": 3,
+          "testCases": [
+            {
+              "name": "kinds_nested",
+              "stdinLines": [
+                "{[()]}"
+              ],
+              "expectedStdout": "OK"
+            },
+            {
+              "name": "type_mismatch",
+              "stdinLines": [
+                "(]"
+              ],
+              "expectedStdout": "NO"
+            },
+            {
+              "name": "interleaved",
+              "stdinLines": [
+                "([)]"
+              ],
+              "expectedStdout": "NO"
+            },
+            {
+              "name": "wrong_close_order",
+              "stdinLines": [
+                "{(})"
+              ],
+              "expectedStdout": "NO"
+            },
+            {
+              "name": "deep_nested",
+              "stdinLines": [
+                "{[({[]})]}"
+              ],
+              "expectedStdout": "OK"
+            },
+            {
+              "name": "repeated_nested",
+              "stdinLines": [
+                "(([]))"
+              ],
+              "expectedStdout": "OK"
+            },
+            {
+              "name": "close_before_open",
+              "stdinLines": [
+                "]["
+              ],
+              "expectedStdout": "NO"
+            }
+          ]
+        },
+        {
+          "stepOrder": 4,
+          "testCases": [
+            {
+              "name": "kinds_sequence",
+              "stdinLines": [
+                "()[]{}"
+              ],
+              "expectedStdout": "OK"
+            },
+            {
+              "name": "kinds_nested",
+              "stdinLines": [
+                "{[()]}"
+              ],
+              "expectedStdout": "OK"
+            },
+            {
+              "name": "deep_nested",
+              "stdinLines": [
+                "{[({[]})]}"
+              ],
+              "expectedStdout": "OK"
+            },
+            {
+              "name": "interleaved",
+              "stdinLines": [
+                "([)]"
+              ],
+              "expectedStdout": "NO 3"
+            },
+            {
+              "name": "close_before_open",
+              "stdinLines": [
+                "]["
+              ],
+              "expectedStdout": "NO 1"
+            },
+            {
+              "name": "type_mismatch",
+              "stdinLines": [
+                "(]"
+              ],
+              "expectedStdout": "NO 2"
+            },
+            {
+              "name": "paren_extra_close",
+              "stdinLines": [
+                "())"
+              ],
+              "expectedStdout": "NO 3"
+            },
+            {
+              "name": "unclosed_tail",
+              "stdinLines": [
+                "()(()"
+              ],
+              "expectedStdout": "NO 3"
+            },
+            {
+              "name": "unclosed_curly",
+              "stdinLines": [
+                "{[]"
+              ],
+              "expectedStdout": "NO 1"
+            },
+            {
+              "name": "unclosed_two",
+              "stdinLines": [
+                "((()"
+              ],
+              "expectedStdout": "NO 1"
+            },
+            {
+              "name": "mismatch_with_open",
+              "stdinLines": [
+                "((]"
+              ],
+              "expectedStdout": "NO 3"
+            }
+          ]
+        },
+        {
+          "stepOrder": 5,
+          "testCases": [
+            {
+              "name": "kinds_nested",
+              "stdinLines": [
+                "{[()]}"
+              ],
+              "expectedStdout": "OK"
+            },
+            {
+              "name": "interleaved",
+              "stdinLines": [
+                "([)]"
+              ],
+              "expectedStdout": "NO 3"
+            },
+            {
+              "name": "unclosed_tail",
+              "stdinLines": [
+                "()(()"
+              ],
+              "expectedStdout": "NO 3"
+            },
+            {
+              "name": "text_ok",
+              "stdinLines": [
+                "a(b[c]d)e"
+              ],
+              "expectedStdout": "OK"
+            },
+            {
+              "name": "text_mismatch_position",
+              "stdinLines": [
+                "foo(bar[1)]"
+              ],
+              "expectedStdout": "NO 10"
+            },
+            {
+              "name": "text_unclosed",
+              "stdinLines": [
+                "x = (1 + 2"
+              ],
+              "expectedStdout": "NO 5"
+            },
+            {
+              "name": "expression_ok",
+              "stdinLines": [
+                "(1+2)*[3-{4/5}]"
+              ],
+              "expectedStdout": "OK"
+            },
+            {
+              "name": "no_brackets",
+              "stdinLines": [
+                "hello"
+              ],
+              "expectedStdout": "OK"
+            },
+            {
+              "name": "text_extra_close",
+              "stdinLines": [
+                "f(x))"
+              ],
+              "expectedStdout": "NO 5"
+            }
+          ]
+        }
+      ]
+    },
+    "projectStructureJson": {
+      "rootPath": "/workspace",
+      "entryFilePath": "main.py",
+      "files": [
+        {
+          "filePath": "main.py",
+          "language": "python",
+          "readonly": false,
+          "content": "def main():\n    line = input().strip()\n\n    # 괄호가 올바른지 검사해 결과를 한 줄로 출력하세요.\n    pass\n\n\nif __name__ == \"__main__\":\n    main()\n"
+        },
+        {
+          "filePath": "README.md",
+          "language": "markdown",
+          "readonly": true,
+          "content": "# 괄호 검사기\n\n표준 입력은 한 줄입니다. 괄호 `()`, `[]`, `{}`가 올바르게 짝지어졌는지 검사합니다.\n\n- 올바르면 `OK`\n- 틀리면 `NO` (4단계부터는 `NO 위치`)\n\n위치는 1부터 셉니다. 짝이 맞지 않는 닫는 괄호가 있으면 그 중 첫 번째 위치, 없으면 닫히지 않은 여는 괄호 중 첫 번째 위치입니다.\n\n5단계부터는 괄호가 아닌 문자가 섞여 있을 수 있고, 위치에는 모든 문자가 포함됩니다.\n"
+        }
+      ]
+    }
   }
 ]

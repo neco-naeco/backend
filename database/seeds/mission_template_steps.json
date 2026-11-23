@@ -138,10 +138,21 @@
     "title": "평균 계산",
     "description": "`AVERAGE` 명령을 추가하고 점수 평균을 출력합니다.",
     "targetFilePath": "main.py",
-    "successCriteria": "평균이 정수이면 `.0` 없이, 아니면 필요한 소수 부분과 함께 출력합니다.",
-    "judgePolicyJson": { "judgeType": "PUBLIC_TEST_CASES", "caseBundleRef": { "source": "mission_templates.judge_policy_json", "stepOrder": 2 } },
-    "successCriteriaJson": { "requiredCommands": ["SUM", "AVERAGE"] },
-    "hintText": "합계를 점수 개수로 나눈 뒤 float의 is_integer()로 출력 형식을 정리할 수 있어요."
+    "successCriteria": "평균은 소수점 둘째 자리까지 반올림하되, 소수 끝의 불필요한 0과 `.0`은 출력하지 않습니다.",
+    "judgePolicyJson": {
+      "judgeType": "PUBLIC_TEST_CASES",
+      "caseBundleRef": {
+        "source": "mission_templates.judge_policy_json",
+        "stepOrder": 2
+      }
+    },
+    "successCriteriaJson": {
+      "requiredCommands": [
+        "SUM",
+        "AVERAGE"
+      ]
+    },
+    "hintText": "합계를 점수 개수로 나눈 뒤 f\"{avg:.2f}\"로 만들고, rstrip(\"0\").rstrip(\".\")으로 정리해보세요."
   },
   {
     "id": "66666666-6666-4666-8666-666666666663",
@@ -162,9 +173,22 @@
     "title": "등급 판정",
     "description": "`GRADES` 명령에서 각 점수를 A부터 F까지의 등급으로 변환합니다.",
     "targetFilePath": "main.py",
-    "successCriteria": "90/80/70/60점을 경계로 A/B/C/D/F를 입력 순서대로 출력합니다.",
-    "judgePolicyJson": { "judgeType": "PUBLIC_TEST_CASES", "caseBundleRef": { "source": "mission_templates.judge_policy_json", "stepOrder": 4 } },
-    "successCriteriaJson": { "requiredCommands": ["SUM", "AVERAGE", "MINMAX", "GRADES"] },
+    "successCriteria": "90점 이상 A, 80점 이상 B, 70점 이상 C, 60점 이상 D, 그 미만은 F를 입력 순서대로 공백 구분해 출력합니다.",
+    "judgePolicyJson": {
+      "judgeType": "PUBLIC_TEST_CASES",
+      "caseBundleRef": {
+        "source": "mission_templates.judge_policy_json",
+        "stepOrder": 4
+      }
+    },
+    "successCriteriaJson": {
+      "requiredCommands": [
+        "SUM",
+        "AVERAGE",
+        "MINMAX",
+        "GRADES"
+      ]
+    },
     "hintText": "점수마다 높은 기준부터 if/elif로 검사하고 등급 목록을 공백으로 join하세요."
   },
   {
@@ -174,10 +198,24 @@
     "title": "합격자 필터링",
     "description": "`PASSED` 명령에서 60점 이상인 점수만 골라냅니다.",
     "targetFilePath": "main.py",
-    "successCriteria": "60점 이상인 점수를 원래 입력 순서대로 공백 구분해 출력합니다.",
-    "judgePolicyJson": { "judgeType": "PUBLIC_TEST_CASES", "caseBundleRef": { "source": "mission_templates.judge_policy_json", "stepOrder": 5 } },
-    "successCriteriaJson": { "requiredCommands": ["SUM", "AVERAGE", "MINMAX", "GRADES", "PASSED"] },
-    "hintText": "리스트 컴프리헨션으로 score >= 60인 값만 선택한 뒤 문자열로 바꾸세요."
+    "successCriteria": "60점 이상인 점수를 원래 입력 순서대로 공백 구분해 출력하고, 없으면 `NONE`을 출력합니다.",
+    "judgePolicyJson": {
+      "judgeType": "PUBLIC_TEST_CASES",
+      "caseBundleRef": {
+        "source": "mission_templates.judge_policy_json",
+        "stepOrder": 5
+      }
+    },
+    "successCriteriaJson": {
+      "requiredCommands": [
+        "SUM",
+        "AVERAGE",
+        "MINMAX",
+        "GRADES",
+        "PASSED"
+      ]
+    },
+    "hintText": "리스트 컴프리헨션으로 score >= 60인 값만 선택한 뒤 문자열로 바꾸세요. 결과가 비어 있으면 NONE을 출력합니다."
   },
   {
     "id": "66666666-6666-4666-8666-666666666666",
@@ -306,32 +344,154 @@
     "successCriteriaJson": { "requiredCommands": ["LENGTH", "REVERSE", "PALINDROME"] }, "hintText": "원본 문자열과 뒤집은 문자열을 비교하세요."
   },
   {
-    "id": "cccccccc-cccc-4ccc-8ccc-ccccccccc911", "missionTemplateId": "99999999-9999-4999-8999-999999999991", "stepOrder": 1,
-    "title": "상품 입고", "description": "ADD 명령으로 재고를 누적합니다.", "targetFilePath": "main.py",
-    "successCriteria": "입고 후 상품명과 현재 재고를 출력합니다.",
-    "judgePolicyJson": { "judgeType": "PUBLIC_TEST_CASES", "caseBundleRef": { "source": "mission_templates.judge_policy_json", "stepOrder": 1 } },
-    "successCriteriaJson": { "requiredCommands": ["ADD"] }, "hintText": "상품별 수량을 딕셔너리에 저장하고 기존 값에 더하세요."
+    "id": "cccccccc-cccc-4ccc-8ccc-ccccccccc911",
+    "missionTemplateId": "99999999-9999-4999-8999-999999999991",
+    "stepOrder": 1,
+    "title": "상품 입고",
+    "description": "ADD 명령으로 재고를 누적합니다.",
+    "targetFilePath": "main.py",
+    "successCriteria": "입고 후 `상품 현재재고`를 출력합니다. 처음 입고하는 상품도 같은 형식입니다.",
+    "judgePolicyJson": {
+      "judgeType": "PUBLIC_TEST_CASES",
+      "caseBundleRef": {
+        "source": "mission_templates.judge_policy_json",
+        "stepOrder": 1
+      }
+    },
+    "successCriteriaJson": {
+      "requiredCommands": [
+        "ADD"
+      ]
+    },
+    "hintText": "상품별 수량을 딕셔너리에 저장하고 기존 값에 더하세요."
   },
   {
-    "id": "cccccccc-cccc-4ccc-8ccc-ccccccccc912", "missionTemplateId": "99999999-9999-4999-8999-999999999991", "stepOrder": 2,
-    "title": "상품 출고", "description": "REMOVE 명령으로 재고를 차감합니다.", "targetFilePath": "main.py",
-    "successCriteria": "출고 후 남은 재고를 출력합니다.",
-    "judgePolicyJson": { "judgeType": "PUBLIC_TEST_CASES", "caseBundleRef": { "source": "mission_templates.judge_policy_json", "stepOrder": 2 } },
-    "successCriteriaJson": { "requiredCommands": ["ADD", "REMOVE"] }, "hintText": "현재 재고가 출고 수량 이상인지 먼저 확인하세요."
+    "id": "cccccccc-cccc-4ccc-8ccc-ccccccccc912",
+    "missionTemplateId": "99999999-9999-4999-8999-999999999991",
+    "stepOrder": 2,
+    "title": "상품 출고",
+    "description": "`REMOVE` 명령으로 재고를 차감합니다.",
+    "targetFilePath": "main.py",
+    "successCriteria": "출고 후 `상품 남은재고`를 출력합니다. 재고가 0이 되어도 `0`으로 출력합니다.",
+    "judgePolicyJson": {
+      "judgeType": "PUBLIC_TEST_CASES",
+      "caseBundleRef": {
+        "source": "mission_templates.judge_policy_json",
+        "stepOrder": 2
+      }
+    },
+    "successCriteriaJson": {
+      "requiredCommands": [
+        "ADD",
+        "REMOVE"
+      ]
+    },
+    "hintText": "입고에 쓴 딕셔너리에서 수량을 빼고, 남은 재고를 출력하세요."
   },
   {
-    "id": "cccccccc-cccc-4ccc-8ccc-ccccccccc913", "missionTemplateId": "99999999-9999-4999-8999-999999999991", "stepOrder": 3,
-    "title": "재고 조회와 오류", "description": "STOCK 조회와 재고 부족 오류를 처리합니다.", "targetFilePath": "main.py",
-    "successCriteria": "조회 결과 또는 `ERROR: insufficient stock`을 출력합니다.",
-    "judgePolicyJson": { "judgeType": "PUBLIC_TEST_CASES", "caseBundleRef": { "source": "mission_templates.judge_policy_json", "stepOrder": 3 } },
-    "successCriteriaJson": { "requiredCommands": ["ADD", "REMOVE", "STOCK"], "errorStrings": ["ERROR: insufficient stock"] }, "hintText": "재고 부족 시 수량을 변경하지 말고 오류만 출력하세요."
+    "id": "cccccccc-cccc-4ccc-8ccc-ccccccccc913",
+    "missionTemplateId": "99999999-9999-4999-8999-999999999991",
+    "stepOrder": 3,
+    "title": "재고 부족 오류",
+    "description": "출고 수량이 현재 재고보다 많으면 오류를 출력합니다.",
+    "targetFilePath": "main.py",
+    "successCriteria": "`ERROR: insufficient stock`을 출력하고 재고는 바꾸지 않습니다.",
+    "judgePolicyJson": {
+      "judgeType": "PUBLIC_TEST_CASES",
+      "caseBundleRef": {
+        "source": "mission_templates.judge_policy_json",
+        "stepOrder": 3
+      }
+    },
+    "successCriteriaJson": {
+      "requiredCommands": [
+        "ADD",
+        "REMOVE"
+      ],
+      "errorStrings": [
+        "ERROR: insufficient stock"
+      ]
+    },
+    "hintText": "차감하기 전에 현재 재고와 출고 수량을 비교하고, 부족하면 수량을 변경하지 말고 오류만 출력하세요."
   },
   {
-    "id": "cccccccc-cccc-4ccc-8ccc-ccccccccc921", "missionTemplateId": "99999999-9999-4999-8999-999999999992", "stepOrder": 1,
-    "title": "레벨별 개수", "description": "COUNT 명령으로 특정 로그 레벨을 셉니다.", "targetFilePath": "main.py",
-    "successCriteria": "요청한 레벨의 개수를 출력합니다.",
-    "judgePolicyJson": { "judgeType": "PUBLIC_TEST_CASES", "caseBundleRef": { "source": "mission_templates.judge_policy_json", "stepOrder": 1 } },
-    "successCriteriaJson": { "requiredCommands": ["COUNT"] }, "hintText": "logs.count(level)을 활용해보세요."
+    "id": "cccccccc-cccc-4ccc-8ccc-ccccccccc914",
+    "missionTemplateId": "99999999-9999-4999-8999-999999999991",
+    "stepOrder": 4,
+    "title": "재고 조회",
+    "description": "`STOCK` 명령으로 상품의 현재 재고를 조회합니다.",
+    "targetFilePath": "main.py",
+    "successCriteria": "`상품 현재재고` 형식으로 출력합니다. 여러 상품이 있어도 조회한 상품의 재고만 출력합니다.",
+    "judgePolicyJson": {
+      "judgeType": "PUBLIC_TEST_CASES",
+      "caseBundleRef": {
+        "source": "mission_templates.judge_policy_json",
+        "stepOrder": 4
+      }
+    },
+    "successCriteriaJson": {
+      "requiredCommands": [
+        "ADD",
+        "REMOVE",
+        "STOCK"
+      ],
+      "errorStrings": [
+        "ERROR: insufficient stock"
+      ]
+    },
+    "hintText": "ADD, REMOVE에서 쓰는 같은 딕셔너리에서 상품 이름으로 값을 꺼내 출력하세요."
+  },
+  {
+    "id": "cccccccc-cccc-4ccc-8ccc-ccccccccc915",
+    "missionTemplateId": "99999999-9999-4999-8999-999999999991",
+    "stepOrder": 5,
+    "title": "입력 오류 처리",
+    "description": "없는 상품, 잘못된 수량, 지원하지 않는 명령을 지정된 오류 문자열로 처리합니다.",
+    "targetFilePath": "main.py",
+    "successCriteria": "없는 상품의 `REMOVE`와 `STOCK`은 `ERROR: product not found`, 1 이상의 정수가 아닌 수량은 `ERROR: invalid quantity`, 알 수 없는 명령은 `ERROR: unsupported command`를 출력합니다. 명령, 수량, 상품 순서로 검사합니다.",
+    "judgePolicyJson": {
+      "judgeType": "PUBLIC_TEST_CASES",
+      "caseBundleRef": {
+        "source": "mission_templates.judge_policy_json",
+        "stepOrder": 5
+      }
+    },
+    "successCriteriaJson": {
+      "requiredCommands": [
+        "ADD",
+        "REMOVE",
+        "STOCK"
+      ],
+      "errorStrings": [
+        "ERROR: insufficient stock",
+        "ERROR: product not found",
+        "ERROR: invalid quantity",
+        "ERROR: unsupported command"
+      ]
+    },
+    "hintText": "수량은 isdigit()과 1 이상인지 먼저 확인하고, 딕셔너리에 상품이 있는지 확인한 뒤 재고를 비교하세요."
+  },
+  {
+    "id": "cccccccc-cccc-4ccc-8ccc-ccccccccc921",
+    "missionTemplateId": "99999999-9999-4999-8999-999999999992",
+    "stepOrder": 1,
+    "title": "레벨별 개수",
+    "description": "`COUNT 레벨` 명령으로 특정 로그 레벨의 개수를 셉니다.",
+    "targetFilePath": "main.py",
+    "successCriteria": "요청한 레벨과 정확히 같은 로그의 개수를 출력합니다. 해당 레벨이 없으면 `0`입니다.",
+    "judgePolicyJson": {
+      "judgeType": "PUBLIC_TEST_CASES",
+      "caseBundleRef": {
+        "source": "mission_templates.judge_policy_json",
+        "stepOrder": 1
+      }
+    },
+    "successCriteriaJson": {
+      "requiredCommands": [
+        "COUNT"
+      ]
+    },
+    "hintText": "logs.count(level)을 활용해보세요."
   },
   {
     "id": "cccccccc-cccc-4ccc-8ccc-ccccccccc922", "missionTemplateId": "99999999-9999-4999-8999-999999999992", "stepOrder": 2,
@@ -341,11 +501,56 @@
     "successCriteriaJson": { "requiredCommands": ["COUNT", "TOTAL"] }, "hintText": "읽어둔 logs 목록의 길이를 출력하세요."
   },
   {
-    "id": "cccccccc-cccc-4ccc-8ccc-ccccccccc923", "missionTemplateId": "99999999-9999-4999-8999-999999999992", "stepOrder": 3,
-    "title": "최다 로그 레벨", "description": "MOST 명령으로 가장 많은 레벨을 찾습니다.", "targetFilePath": "main.py",
-    "successCriteria": "레벨과 개수를 공백으로 구분해 출력합니다.",
-    "judgePolicyJson": { "judgeType": "PUBLIC_TEST_CASES", "caseBundleRef": { "source": "mission_templates.judge_policy_json", "stepOrder": 3 } },
-    "successCriteriaJson": { "requiredCommands": ["COUNT", "TOTAL", "MOST"] }, "hintText": "딕셔너리로 레벨별 개수를 만든 뒤 최댓값을 찾으세요."
+    "id": "cccccccc-cccc-4ccc-8ccc-ccccccccc923",
+    "missionTemplateId": "99999999-9999-4999-8999-999999999992",
+    "stepOrder": 3,
+    "title": "최다 로그 레벨",
+    "description": "`MOST` 명령으로 가장 많이 나온 레벨을 찾습니다.",
+    "targetFilePath": "main.py",
+    "successCriteria": "`레벨 개수` 형식으로 출력합니다. 개수가 같으면 먼저 등장한 레벨을 출력합니다.",
+    "judgePolicyJson": {
+      "judgeType": "PUBLIC_TEST_CASES",
+      "caseBundleRef": {
+        "source": "mission_templates.judge_policy_json",
+        "stepOrder": 3
+      }
+    },
+    "successCriteriaJson": {
+      "requiredCommands": [
+        "COUNT",
+        "TOTAL",
+        "MOST"
+      ]
+    },
+    "hintText": "딕셔너리에 레벨별 개수를 모은 뒤 max(counts, key=counts.get)를 쓰면 먼저 들어간 레벨이 우선됩니다."
+  },
+  {
+    "id": "cccccccc-cccc-4ccc-8ccc-ccccccccc924",
+    "missionTemplateId": "99999999-9999-4999-8999-999999999992",
+    "stepOrder": 4,
+    "title": "빈 입력과 오류 처리",
+    "description": "로그가 없는 경우와 잘못된 명령을 처리합니다.",
+    "targetFilePath": "main.py",
+    "successCriteria": "로그가 없으면 `TOTAL`과 `COUNT`는 `0`, `MOST`는 `NONE`을 출력합니다. 알 수 없는 명령은 `ERROR: unsupported command`, 레벨이 없는 `COUNT`는 `ERROR: missing level`을 출력합니다.",
+    "judgePolicyJson": {
+      "judgeType": "PUBLIC_TEST_CASES",
+      "caseBundleRef": {
+        "source": "mission_templates.judge_policy_json",
+        "stepOrder": 4
+      }
+    },
+    "successCriteriaJson": {
+      "requiredCommands": [
+        "COUNT",
+        "TOTAL",
+        "MOST"
+      ],
+      "errorStrings": [
+        "ERROR: unsupported command",
+        "ERROR: missing level"
+      ]
+    },
+    "hintText": "MOST는 logs가 비어 있는지 먼저 확인하세요. COUNT는 split() 결과에 레벨이 있는지 확인하고, 알 수 없는 명령은 마지막 else에서 처리하세요."
   },
   {
     "id": "dddddddd-dddd-4ddd-8ddd-ddddddddda11", "missionTemplateId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1", "stepOrder": 1,
@@ -388,5 +593,244 @@
     "successCriteria": "현재 예약자를 출력하고 중복 예약은 `ERROR: already reserved`로 거절합니다.",
     "judgePolicyJson": { "judgeType": "PUBLIC_TEST_CASES", "caseBundleRef": { "source": "mission_templates.judge_policy_json", "stepOrder": 3 } },
     "successCriteriaJson": { "requiredCommands": ["RESERVE", "CANCEL", "STATUS"], "errorStrings": ["ERROR: already reserved"] }, "hintText": "예약 전에 좌석이 이미 딕셔너리에 있는지 확인하세요."
+  },
+  {
+    "id": "ffffffff-ffff-4fff-8fff-fffffffff001",
+    "missionTemplateId": "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee1",
+    "stepOrder": 1,
+    "title": "소수 판별",
+    "description": "`PRIME` 명령에서 입력한 정수가 소수인지 판별합니다.",
+    "targetFilePath": "main.py",
+    "successCriteria": "소수이면 `PRIME`, 소수가 아니면 `NOT PRIME`만 출력합니다. 1은 소수가 아닙니다.",
+    "judgePolicyJson": {
+      "judgeType": "PUBLIC_TEST_CASES",
+      "caseBundleRef": {
+        "source": "mission_templates.judge_policy_json",
+        "stepOrder": 1
+      }
+    },
+    "successCriteriaJson": {
+      "requiredCommands": [
+        "PRIME"
+      ]
+    },
+    "hintText": "2부터 n의 제곱근까지 나누어떨어지는 수가 있는지 확인하고, n이 2보다 작으면 바로 NOT PRIME으로 처리하세요."
+  },
+  {
+    "id": "ffffffff-ffff-4fff-8fff-fffffffff002",
+    "missionTemplateId": "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee1",
+    "stepOrder": 2,
+    "title": "소수 개수 세기",
+    "description": "`COUNT` 명령을 추가해 n 이하 소수의 개수를 출력합니다.",
+    "targetFilePath": "main.py",
+    "successCriteria": "n 이하의 소수 개수만 출력합니다. 소수가 없으면 `0`입니다.",
+    "judgePolicyJson": {
+      "judgeType": "PUBLIC_TEST_CASES",
+      "caseBundleRef": {
+        "source": "mission_templates.judge_policy_json",
+        "stepOrder": 2
+      }
+    },
+    "successCriteriaJson": {
+      "requiredCommands": [
+        "PRIME",
+        "COUNT"
+      ]
+    },
+    "hintText": "1단계의 소수 판별을 함수로 분리해 2부터 n까지 반복 호출하면 개수를 셀 수 있어요."
+  },
+  {
+    "id": "ffffffff-ffff-4fff-8fff-fffffffff003",
+    "missionTemplateId": "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee1",
+    "stepOrder": 3,
+    "title": "소수 목록 출력",
+    "description": "`LIST` 명령을 추가해 n 이하 소수를 공백으로 구분해 출력합니다.",
+    "targetFilePath": "main.py",
+    "successCriteria": "오름차순으로 한 줄에 출력하고, 소수가 없으면 `NONE`을 출력합니다.",
+    "judgePolicyJson": {
+      "judgeType": "PUBLIC_TEST_CASES",
+      "caseBundleRef": {
+        "source": "mission_templates.judge_policy_json",
+        "stepOrder": 3
+      }
+    },
+    "successCriteriaJson": {
+      "requiredCommands": [
+        "PRIME",
+        "COUNT",
+        "LIST"
+      ]
+    },
+    "hintText": "소수를 리스트에 모은 뒤 ' '.join(map(str, primes))로 출력하세요. 리스트가 비어 있으면 NONE을 출력합니다."
+  },
+  {
+    "id": "ffffffff-ffff-4fff-8fff-fffffffff004",
+    "missionTemplateId": "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee1",
+    "stepOrder": 4,
+    "title": "소인수분해",
+    "description": "`FACTOR` 명령을 추가해 n을 소인수분해합니다.",
+    "targetFilePath": "main.py",
+    "successCriteria": "소인수를 오름차순으로, 중복 횟수만큼 공백으로 구분해 출력합니다. 예: 12는 `2 2 3`.",
+    "judgePolicyJson": {
+      "judgeType": "PUBLIC_TEST_CASES",
+      "caseBundleRef": {
+        "source": "mission_templates.judge_policy_json",
+        "stepOrder": 4
+      }
+    },
+    "successCriteriaJson": {
+      "requiredCommands": [
+        "PRIME",
+        "COUNT",
+        "LIST",
+        "FACTOR"
+      ]
+    },
+    "hintText": "2부터 시작해 나누어떨어지는 동안 나누고 소인수를 기록하세요. 마지막에 남은 값이 1보다 크면 그 값도 소인수입니다."
+  },
+  {
+    "id": "ffffffff-ffff-4fff-8fff-fffffffff005",
+    "missionTemplateId": "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee1",
+    "stepOrder": 5,
+    "title": "오류 처리",
+    "description": "잘못된 입력과 지원하지 않는 명령을 처리합니다.",
+    "targetFilePath": "main.py",
+    "successCriteria": "정수가 아닌 값과 `FACTOR`의 2 미만 입력은 `ERROR: invalid number`, 알 수 없는 명령은 `ERROR: unsupported command`를 출력합니다. 명령을 먼저 검사합니다.",
+    "judgePolicyJson": {
+      "judgeType": "PUBLIC_TEST_CASES",
+      "caseBundleRef": {
+        "source": "mission_templates.judge_policy_json",
+        "stepOrder": 5
+      }
+    },
+    "successCriteriaJson": {
+      "requiredCommands": [
+        "PRIME",
+        "COUNT",
+        "LIST",
+        "FACTOR"
+      ]
+    },
+    "hintText": "int() 변환을 try/except ValueError로 감싸고, 명령 이름 검사를 숫자 변환보다 먼저 하세요."
+  },
+  {
+    "id": "ffffffff-ffff-4fff-8fff-fffffffff011",
+    "missionTemplateId": "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee2",
+    "stepOrder": 1,
+    "title": "괄호 균형 검사",
+    "description": "`(`와 `)`만 검사해 올바른 괄호열이면 `OK`, 아니면 `NO`를 출력합니다.",
+    "targetFilePath": "main.py",
+    "successCriteria": "여는 괄호와 닫는 괄호의 개수가 같고 닫는 괄호가 먼저 나오지 않으면 `OK`, 아니면 `NO`를 출력합니다.",
+    "judgePolicyJson": {
+      "judgeType": "PUBLIC_TEST_CASES",
+      "caseBundleRef": {
+        "source": "mission_templates.judge_policy_json",
+        "stepOrder": 1
+      }
+    },
+    "successCriteriaJson": {
+      "requiredFeatures": [
+        "paren"
+      ]
+    },
+    "hintText": "여는 괄호는 +1, 닫는 괄호는 -1을 하고, 값이 0보다 작아지는 순간 NO로 처리하세요."
+  },
+  {
+    "id": "ffffffff-ffff-4fff-8fff-fffffffff012",
+    "missionTemplateId": "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee2",
+    "stepOrder": 2,
+    "title": "세 종류 괄호",
+    "description": "`[]`와 `{}`를 추가해 `()`, `[]`, `{}` 세 종류를 검사합니다.",
+    "targetFilePath": "main.py",
+    "successCriteria": "세 종류 괄호가 각각 짝이 맞으면 `OK`, 아니면 `NO`를 출력합니다.",
+    "judgePolicyJson": {
+      "judgeType": "PUBLIC_TEST_CASES",
+      "caseBundleRef": {
+        "source": "mission_templates.judge_policy_json",
+        "stepOrder": 2
+      }
+    },
+    "successCriteriaJson": {
+      "requiredFeatures": [
+        "paren",
+        "kinds"
+      ]
+    },
+    "hintText": "괄호 종류마다 개수를 따로 세고, 닫는 괄호가 먼저 나오면 NO로 처리하세요."
+  },
+  {
+    "id": "ffffffff-ffff-4fff-8fff-fffffffff013",
+    "missionTemplateId": "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee2",
+    "stepOrder": 3,
+    "title": "중첩과 순서",
+    "description": "괄호가 올바른 순서로 열리고 닫히는지 스택으로 검증합니다.",
+    "targetFilePath": "main.py",
+    "successCriteria": "`([)]`처럼 종류별 개수는 맞아도 닫는 순서가 틀리면 `NO`를 출력합니다.",
+    "judgePolicyJson": {
+      "judgeType": "PUBLIC_TEST_CASES",
+      "caseBundleRef": {
+        "source": "mission_templates.judge_policy_json",
+        "stepOrder": 3
+      }
+    },
+    "successCriteriaJson": {
+      "requiredFeatures": [
+        "paren",
+        "kinds",
+        "stack"
+      ]
+    },
+    "hintText": "여는 괄호는 스택에 넣고, 닫는 괄호가 나오면 스택 맨 위의 괄호와 짝이 맞는지 확인하세요."
+  },
+  {
+    "id": "ffffffff-ffff-4fff-8fff-fffffffff014",
+    "missionTemplateId": "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee2",
+    "stepOrder": 4,
+    "title": "어긋난 위치",
+    "description": "틀린 경우 `NO 위치`로 처음 어긋난 위치를 함께 출력합니다. 위치는 1부터 셉니다.",
+    "targetFilePath": "main.py",
+    "successCriteria": "짝이 맞지 않는 닫는 괄호가 있으면 그 중 첫 번째 위치를, 없으면 닫히지 않은 여는 괄호 중 첫 번째 위치를 `NO 위치`로 출력합니다. 올바르면 `OK`를 출력합니다.",
+    "judgePolicyJson": {
+      "judgeType": "PUBLIC_TEST_CASES",
+      "caseBundleRef": {
+        "source": "mission_templates.judge_policy_json",
+        "stepOrder": 4
+      }
+    },
+    "successCriteriaJson": {
+      "requiredFeatures": [
+        "paren",
+        "kinds",
+        "stack",
+        "position"
+      ]
+    },
+    "hintText": "스택에 괄호와 위치를 함께 저장하세요. 닫는 괄호가 맞지 않으면 그 위치를, 끝났는데 스택이 남아 있으면 스택 맨 아래의 위치를 출력합니다."
+  },
+  {
+    "id": "ffffffff-ffff-4fff-8fff-fffffffff015",
+    "missionTemplateId": "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee2",
+    "stepOrder": 5,
+    "title": "괄호 외 문자",
+    "description": "괄호가 아닌 문자가 섞인 입력을 처리합니다. 위치는 공백과 문자를 포함한 원래 문자열 기준입니다.",
+    "targetFilePath": "main.py",
+    "successCriteria": "괄호가 아닌 문자는 무시하고 판정하며, 오류 위치는 원래 문자열에서 1부터 센 위치로 출력합니다.",
+    "judgePolicyJson": {
+      "judgeType": "PUBLIC_TEST_CASES",
+      "caseBundleRef": {
+        "source": "mission_templates.judge_policy_json",
+        "stepOrder": 5
+      }
+    },
+    "successCriteriaJson": {
+      "requiredFeatures": [
+        "paren",
+        "kinds",
+        "stack",
+        "position",
+        "text"
+      ]
+    },
+    "hintText": "괄호가 아닌 문자는 건너뛰되, enumerate의 위치 값은 그대로 늘어나게 두세요."
   }
 ]
