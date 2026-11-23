@@ -88,7 +88,12 @@ describe('GameRoomsService', () => {
       update: jest.fn(),
     };
 
-    itemRepository = { insert: jest.fn().mockResolvedValue({}), findOne: jest.fn().mockResolvedValue({ quantity: 1 }) };
+    itemRepository = {
+      insert: jest.fn().mockResolvedValue({}),
+      findOne: jest.fn(async ({ where }: { where: { itemType: GameItemType } }) =>
+        itemRepository.insert.mock.calls[itemRepository.insert.mock.calls.length - 1]?.[0]
+          ?.find((item: { itemType: GameItemType }) => item.itemType === where.itemType) ?? null),
+    };
 
     manager = {
       getRepository: jest.fn((entity) => {
@@ -427,14 +432,59 @@ describe('GameRoomsService', () => {
       }),
     );
     expect(itemRepository.insert).toHaveBeenCalledTimes(1);
-    expect(itemRepository.insert).toHaveBeenCalledWith({
-      gameRoomId: 'room-1',
-      itemType: GameItemType.TIME_EXTENSION_30,
-      quantity: 1,
-      usedCount: 0,
-    });
+    expect(itemRepository.insert).toHaveBeenCalledWith([
+      {
+        gameRoomId: 'room-1',
+        itemType: GameItemType.TIME_EXTENSION_30,
+        quantity: 1,
+        usedCount: 0,
+        activeCount: 0,
+        unlockReason: 'GAME_START',
+        unlockedAt: expect.any(Date),
+      },
+      {
+        gameRoomId: 'room-1',
+        itemType: GameItemType.STRIKE_SHIELD,
+        quantity: 0,
+        usedCount: 0,
+        activeCount: 0,
+        unlockReason: null,
+        unlockedAt: null,
+      },
+      {
+        gameRoomId: 'room-1',
+        itemType: GameItemType.TURN_PASS,
+        quantity: 0,
+        usedCount: 0,
+        activeCount: 0,
+        unlockReason: null,
+        unlockedAt: null,
+      },
+    ]);
     expect(result).toEqual({
-      items: [{ itemType: GameItemType.TIME_EXTENSION_30, remainingQuantity: 1 }],
+      items: [
+        {
+          itemType: GameItemType.TIME_EXTENSION_30,
+          remainingQuantity: 1,
+          activeCount: 0,
+          unlocked: true,
+          unlockReason: 'GAME_START',
+        },
+        {
+          itemType: GameItemType.STRIKE_SHIELD,
+          remainingQuantity: 0,
+          activeCount: 0,
+          unlocked: false,
+          unlockReason: null,
+        },
+        {
+          itemType: GameItemType.TURN_PASS,
+          remainingQuantity: 0,
+          activeCount: 0,
+          unlocked: false,
+          unlockReason: null,
+        },
+      ],
       gameRoom: expect.objectContaining({
         id: 'room-1',
         status: GameRoomStatus.IN_PROGRESS,
